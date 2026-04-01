@@ -1,69 +1,71 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from datetime import date
-from typing import List, Optional
-import sqlalchemy
+from fastapi import FastAPI, HTTPException, Request, Form
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import create_engine, text
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 
-# --- 1. CONEXÃO COM O TANQUE (BANCO DE DADOS) ---
-# COLE O SEU LINK DA URI AQUI EMBAIXO
-DATABASE_URL = "postgresql://postgres:Somdeboas2026@db.zykgsosahlavullteema.supabase.co:5432/postgres://"
+app = FastAPI(title="Sistema Quiosque Brahma")
 
+# --- 1. CONEXÃO (AJUSTADA COM A PORTA 6543) ---
+DATABASE_URL = "postgresql://postgres:Somdeboas23@db.zykgsosahlavullteema.supabase.co:6543/postgres?prepare_threshold=0"
 engine = create_engine(DATABASE_URL)
-app = FastAPI(title="Motor do Bar do Mano")
 
-# --- 2. MODELOS (O que o motor entende) ---
-class ClienteSchema(BaseModel):
-    nome: str
-    telefone: str
-    data_nascimento: date
+# --- 2. TELAS (HTML) ---
+@app.get("/", response_class=HTMLResponse)
+async def tela_login():
+    return """
+    <html>
+        <head>
+            <title>Login - Quiosque Chopp Brahma</title>
+            <style>
+                body { background-color: #004795; font-family: Arial; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+                .login-card { background: white; padding: 40px; border-radius: 15px; border: 4px solid #f0ba00; text-align: center; width: 350px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+                h1 { color: #e21c21; margin-bottom: 25px; font-size: 24px; text-transform: uppercase; }
+                input { width: 100%; padding: 12px; margin: 10px 0; border: 2px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 16px; }
+                button { background: #e21c21; color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 18px; margin-top: 10px; }
+                .atalhos { margin-top: 20px; font-size: 12px; color: #666; }
+            </style>
+        </head>
+        <body>
+            <div class="login-card">
+                <img src="https://logodownload.org/wp-content/uploads/2014/04/brahma-logo-1.png" width="120">
+                <h1>Quiosque Chopp Brahma</h1>
+                <form action="/login" method="post">
+                    <input type="text" name="username" placeholder="Usuário" required autofocus id="user">
+                    <input type="password" name="password" placeholder="Senha" required id="pass">
+                    <button type="submit">ENTRAR (F2)</button>
+                </form>
+                <div class="atalhos">
+                    F2: Entrar | F3: Ajuda
+                </div>
+            </div>
+            <script>
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'F2') document.querySelector('form').submit();
+                    if (e.key === 'F3') alert('Contate o gerente para suporte.');
+                });
+            </script>
+        </body>
+    </html>
+    """
 
-class PedidoSchema(BaseModel):
-    id_cartao: int
-    id_produto: int
-    quantidade: int
-
-# --- 3. ROTAS (O que o motor faz) ---
-
-@app.get("/")
-def inicio():
-    return {"status": "Motor Rodando!", "msg": "Sistema do Bar do Mano Online"}
-
-# ROTA: Fazer Check-in (Ativar Cartão)
-@app.post("/checkin/{id_cartao}/{id_mesa}")
-def checkin(id_cartao: int, id_mesa: int, cliente: ClienteSchema):
+@app.post("/login")
+async def processa_login(username: str = Form(...), password: str = Form(...)):
     with engine.connect() as conn:
-        # Cadastra o cliente e abre a comanda
-        query_cliente = text("INSERT INTO clientes (nome, telefone, data_nascimento) VALUES (:n, :t, :d) RETURNING id")
-        res = conn.execute(query_cliente, {"n": cliente.nome, "t": cliente.telefone, "d": cliente.data_nascimento})
-        cliente_id = res.fetchone()[0]
+        query = text("SELECT * FROM usuarios WHERE username = :u AND password = :p")
+        user = conn.execute(query, {"u": username, "p": password}).fetchone()
         
-        query_comanda = text("INSERT INTO comandas (id_cartao, id_mesa, id_cliente) VALUES (:c, :m, :id_c)")
-        conn.execute(query_comanda, {"c": id_cartao, "m": id_mesa, "id_c": cliente_id})
-        conn.commit()
-    return {"msg": f"Cartão {id_cartao} ativo na Mesa {id_mesa}"}
+        if user:
+            return RedirectResponse(url="/vendas", status_code=303)
+        else:
+            return HTMLResponse("<script>alert('Usuário ou Senha Incorretos!'); window.location.href='/';</script>")
 
-# ROTA: Lançar Pedido (Cerveja, Jantinha, etc)
-@app.post("/lancar-pedido")
-def lancar(pedido: PedidoSchema):
-    with engine.connect() as conn:
-        # 1. Tira do estoque
-        query_baixa = text("UPDATE produtos SET estoque_atual = estoque_atual - :q WHERE id = :p")
-        conn.execute(query_baixa, {"q": pedido.quantidade, "p": pedido.id_produto})
-        
-        # 2. Registra na conta do cartão
-        query_pedido = text("INSERT INTO pedidos (id_cartao, id_produto, quantidade) VALUES (:c, :p, :q)")
-        conn.execute(query_pedido, {"c": pedido.id_cartao, "p": pedido.id_produto, "q": pedido.quantidade})
-        
-        conn.commit()
-    return {"status": "Sucesso", "msg": "Pedido registrado e estoque atualizado!"}
+@app.get("/vendas", response_class=HTMLResponse)
+async def tela_vendas():
+    return "<h1>Login com Sucesso! Em breve a tela de vendas aqui...</h1>"
 
-# ROTA: Ver Aniversariantes do Dia
 @app.get("/aniversariantes")
-def niver():
+async def lista_aniversariantes():
     with engine.connect() as conn:
-        query = text("SELECT nome, telefone FROM clientes WHERE EXTRACT(DAY FROM data_nascimento) = EXTRACT(DAY FROM CURRENT_DATE) AND EXTRACT(MONTH FROM data_nascimento) = EXTRACT(MONTH FROM CURRENT_DATE)")
-        res = conn.execute(query).fetchall()
-        # Transforma em lista fácil de ler
-        lista = [{"nome": r[0], "telefone": r[1]} for r in res]
-    return lista
+        result = conn.execute(text("SELECT nome FROM clientes WHERE EXTRACT(MONTH FROM data_nascimento) = EXTRACT(MONTH FROM CURRENT_DATE)"))
+        return [row[0] for row in result]

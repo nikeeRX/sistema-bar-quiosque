@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, text
 app = FastAPI()
 
 # URL Direta - Porta 5432 (A que funcionou!)
-DATABASE_URL = "postgresql://postgres:Somdeboas23@db.zykgsosahlavullteema.supabase.co:5432/postgres?sslmode=require"
+DATABASE_URL = "postgresql://postgres.zykgsosahlavullteema:Somdeboas23@aws-0-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require"
 engine = create_engine(DATABASE_URL)
 
 @app.get("/", response_class=HTMLResponse)

@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, text
 
 # --- 1. CONEXÃO COM O TANQUE (BANCO DE DADOS) ---
 # COLE O SEU LINK DA URI AQUI EMBAIXO
-DATABASE_URL = "postgresql://postgres:Somdeboas23@db.zykgsosahlavullteema.supabase.co:5432/postgres"
+DATABASE_URL = "postgresql://postgres:Somdeboas2026@db.zykgsosahlavullteema.supabase.co:5432/postgres"
 
 engine = create_engine(DATABASE_URL)
 app = FastAPI(title="Motor do Bar do Mano")

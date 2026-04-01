@@ -6,7 +6,7 @@ app = FastAPI()
 
 # --- NOVA CONEXÃO HTTP (PARA PULAR FIREWALL DE EMPRESA) ---
 # Se a senha real for Somdeboas2026, substitua abaixo. Note o .zykgsosahlavullteema no usuário.
-DATABASE_URL = "postgresql://postgres.zykgsosahlavullteema:Somdeboas23@aws-0-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require"
+DATABASE_URL = "postgresql://postgres:Somdeboas23@aws-0-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require"
 engine = create_engine(DATABASE_URL)
 
 @app.get("/", response_class=HTMLResponse)

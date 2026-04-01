@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, text
 app = FastAPI(title="Sistema Quiosque Brahma")
 
 # --- 1. CONEXÃO ---
-DATABASE_URL = "postgresql://postgres:Somdeboas2026@db.zykgsosahlavullteema.supabase.co:6543/postgres?prepare_threshold=0"
+DATABASE_URL = "postgresql://postgres:Somdeboas23@db.zykgsosahlavullteema.supabase.co:6543/postgres?prepare_threshold=0"
 engine = create_engine(DATABASE_URL)
 
 # --- 2. TELA DE LOGIN ---

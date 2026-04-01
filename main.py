@@ -1,90 +1,84 @@
 from fastapi import FastAPI, HTTPException, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import create_engine, text
-import uvicorn
 
-app = FastAPI(title="Sistema Quiosque Brahma")
+app = FastAPI()
 
-# --- 1. CONEXÃO LIMPA (Removido o parâmetro que deu erro) ---
+# --- CONEXÃO COM POOLER (PARA PULAR FIREWALL) ---
 DATABASE_URL = "postgresql://postgres.zykgsosahlavullteema:Somdeboas23@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?sslmode=require"
 engine = create_engine(DATABASE_URL)
 
-# --- 2. TELA DE LOGIN ---
+# --- TELA DE LOGIN ---
 @app.get("/", response_class=HTMLResponse)
-async def tela_login():
+async def login():
     return """
-    <html>
-        <head>
-            <title>Login - Quiosque Chopp Brahma</title>
-            <style>
-                body { background-color: #004795; font-family: Arial; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-                .login-card { background: white; padding: 40px; border-radius: 15px; border: 4px solid #f0ba00; text-align: center; width: 350px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
-                h1 { color: #e21c21; margin-bottom: 25px; font-size: 20px; text-transform: uppercase; }
-                input { width: 100%; padding: 12px; margin: 10px 0; border: 2px solid #ccc; border-radius: 5px; box-sizing: border-box; font-size: 16px; }
-                button { background: #e21c21; color: white; border: none; padding: 15px; width: 100%; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 18px; margin-top: 10px; }
-            </style>
-        </head>
-        <body>
-            <div class="login-card">
-                <img src="https://logodownload.org/wp-content/uploads/2014/04/brahma-logo-1.png" width="100">
-                <h1>Quiosque Chopp Brahma</h1>
-                <form action="/login" method="post">
-                    <input type="text" name="username" placeholder="Usuário" required autofocus>
-                    <input type="password" name="password" placeholder="Senha" required>
-                    <button type="submit">ENTRAR (F2)</button>
+    <body style="background:#004795; display:flex; justify-content:center; align-items:center; height:100vh; font-family:Arial;">
+        <div style="background:white; padding:40px; border-radius:15px; text-align:center; border:4px solid #f0ba00;">
+            <h2 style="color:#e21c21;">QUIOSQUE BRAHMA</h2>
+            <form action="/login" method="post">
+                <input name="username" placeholder="Usuário" style="display:block; width:100%; margin:10px 0; padding:10px;">
+                <input name="password" type="password" placeholder="Senha" style="display:block; width:100%; margin:10px 0; padding:10px;">
+                <button style="background:#e21c21; color:white; width:100%; padding:10px; cursor:pointer; font-weight:bold;">ENTRAR (F2)</button>
+            </form>
+        </div>
+    </body>
+    """
+
+@app.post("/login")
+async def do_login(username: str = Form(...), password: str = Form(...)):
+    with engine.connect() as conn:
+        res = conn.execute(text("SELECT * FROM usuarios WHERE username=:u AND password=:p"), {"u":username, "p":password}).fetchone()
+        if res: return RedirectResponse("/painel", status_code=303)
+        return "Erro: Usuário ou senha inválidos"
+
+# --- PAINEL DE GESTÃO (ESTOQUE E CADASTRO) ---
+@app.get("/painel", response_class=HTMLResponse)
+async def painel():
+    return """
+    <body style="background:#004795; color:white; font-family:Arial; padding:20px;">
+        <div style="display:flex; justify-content:space-between; border-bottom:2px solid #f0ba00;">
+            <h1>GERENCIAMENTO DE ESTOQUE</h1>
+            <a href="/" style="color:white; text-decoration:none;">SAIR (ESC)</a>
+        </div>
+        
+        <div style="display:grid; grid-template-columns: 1fr 2fr; gap:20px; margin-top:20px;">
+            <div style="background:rgba(255,255,255,0.1); padding:20px; border-radius:10px;">
+                <h3>CADASTRAR NOVO PRODUTO</h3>
+                <form action="/cadastrar" method="post">
+                    <input name="codigo" placeholder="Código do Produto" style="width:100%; margin:5px 0; padding:8px;">
+                    <input name="nome" placeholder="Descrição/Nome" style="width:100%; margin:5px 0; padding:8px;">
+                    <input name="preco" placeholder="Valor de Venda (Ex: 12.50)" style="width:100%; margin:5px 0; padding:8px;">
+                    <input name="estoque" placeholder="Qtd em Estoque" style="width:100%; margin:5px 0; padding:8px;">
+                    <label><input type="checkbox" name="promo"> Item em Promoção?</label>
+                    <button style="width:100%; background:#f0ba00; color:#004795; font-weight:bold; padding:10px; margin-top:10px; border:none; cursor:pointer;">SALVAR PRODUTO (F5)</button>
                 </form>
             </div>
-        </body>
-    </html>
+
+            <div style="background:white; color:#333; padding:20px; border-radius:10px;">
+                <h3>ITENS NO INVENTÁRIO</h3>
+                <table style="width:100%; border-collapse:collapse;">
+                    <tr style="background:#eee;">
+                        <th style="padding:10px; text-align:left;">Cod</th>
+                        <th style="padding:10px; text-align:left;">Produto</th>
+                        <th style="padding:10px; text-align:left;">Preço</th>
+                        <th style="padding:10px; text-align:left;">Estoque</th>
+                        <th style="padding:10px; text-align:left;">Status</th>
+                    </tr>
+                    </table>
+            </div>
+        </div>
+    </body>
     """
 
-# --- 3. PROCESSA O LOGIN ---
-@app.post("/login")
-async def processa_login(username: str = Form(...), password: str = Form(...)):
+# --- LÓGICA DE CADASTRO NO BANCO ---
+@app.post("/cadastrar")
+async def cadastrar(codigo: str = Form(...), nome: str = Form(...), preco: float = Form(...), estoque: int = Form(...), promo: bool = Form(False)):
     try:
-        with engine.connect() as conn:
-            query = text("SELECT username FROM usuarios WHERE username = :u AND password = :p")
-            user = conn.execute(query, {"u": username, "p": password}).fetchone()
-            if user:
-                return RedirectResponse(url="/vendas", status_code=303)
-            else:
-                return HTMLResponse("<script>alert('Usuário ou Senha Incorretos!'); window.location.href='/';</script>")
+        with engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO produtos (nome, preco_venda, estoque_atual, codigo_barras, em_promocao) 
+                VALUES (:n, :p, :e, :c, :promo)
+            """), {"n": nome, "p": preco, "e": estoque, "c": codigo, "promo": promo})
+        return RedirectResponse("/painel", status_code=303)
     except Exception as e:
-        return HTMLResponse(f"<h1>Erro de Conexão: Verifique a senha do Banco</h1><p>{str(e)}</p>")
-
-# --- 4. TELA DE VENDAS E GESTÃO ---
-@app.get("/vendas", response_class=HTMLResponse)
-async def tela_vendas():
-    return """
-    <html>
-        <head>
-            <title>Painel - Quiosque Brahma</title>
-            <style>
-                body { background-color: #004795; color: white; font-family: Arial; margin: 0; padding: 20px; }
-                .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f0ba00; padding-bottom: 10px; }
-                .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 30px; }
-                .btn-acao { background: #e21c21; border: 2px solid white; color: white; padding: 30px; border-radius: 10px; cursor: pointer; font-size: 18px; font-weight: bold; text-align: center; text-decoration: none; }
-                .btn-acao:hover { background: #f0ba00; color: #004795; }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <img src="https://logodownload.org/wp-content/uploads/2014/04/brahma-logo-1.png" width="80">
-                <h2>PAINEL DE CONTROLE</h2>
-                <a href="/" style="color: white;">Sair (Esc)</a>
-            </div>
-            
-            <div class="menu-grid">
-                <div class="btn-acao">VENDAS (F1)</div>
-                <div class="btn-acao">ESTOQUE / PRODUTOS (F4)</div>
-                <div class="btn-acao">CADASTRAR ITEM (F5)</div>
-                <div class="btn-acao">RELATÓRIOS (F9)</div>
-            </div>
-
-            <div style="margin-top: 50px; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px;">
-                <h3>Status do Sistema: <span style="color: #00ff00;">ONLINE</span></h3>
-                <p>Banco de Dados Conectado com Sucesso.</p>
-            </div>
-        </body>
-    </html>
-    """
+        return f"Erro ao cadastrar: {str(e)}"

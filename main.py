@@ -70,4 +70,4 @@ async def lista_aniversariantes():
         result = conn.execute(text("SELECT nome FROM clientes WHERE EXTRACT(MONTH FROM data_nascimento) = EXTRACT(MONTH FROM CURRENT_DATE)"))
         return [row[0] for row in result]
 
-INSERT INTO usuarios (username, password) VALUES ('admin', '1234');
+

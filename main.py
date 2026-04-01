@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, text
 app = FastAPI()
 
 # --- CONEXÃO COM POOLER (PARA PULAR FIREWALL) ---
-DATABASE_URL = "postgresql://postgres.zykgsosahlavullteema:Somdeboas23@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?sslmode=require"
+DATABASE_URL = "postgresql://postgres:Somdeboas23@db.zykgsosahlavullteema.supabase.co:5432/postgres?sslmode=require"
 engine = create_engine(DATABASE_URL)
 
 # --- TELA DE LOGIN ---

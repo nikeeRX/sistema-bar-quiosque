@@ -6,7 +6,7 @@ import uvicorn
 app = FastAPI(title="Sistema Quiosque Brahma")
 
 # --- 1. CONEXÃO LIMPA (Removido o parâmetro que deu erro) ---
-DATABASE_URL = "postgresql://postgres:Somdeboas23@db.zykgsosahlavullteema.supabase.co:5432/postgres?sslmode=require"
+DATABASE_URL = "postgresql://postgres.zykgsosahlavullteema:Somdeboas23@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?sslmode=require"
 engine = create_engine(DATABASE_URL)
 
 # --- 2. TELA DE LOGIN ---

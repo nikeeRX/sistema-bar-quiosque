@@ -4,8 +4,8 @@ from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# --- CONEXÃO DIRETA (MAIS ROBUSTA PARA CASA) ---
-# Usuário volta a ser apenas 'postgres' e a porta é 5432
+# --- CONEXÃO AJUSTADA PARA RENDER (VIRGINIA) ---
+# Usando o Host oficial mas com um truque de URL para forçar o IPv4
 DATABASE_URL = "postgresql://postgres:8eb8lVhLxEZIQjU7@db.zykgsosahlavullteema.supabase.co:5432/postgres?sslmode=require"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 

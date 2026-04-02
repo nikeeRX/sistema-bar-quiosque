@@ -4,9 +4,7 @@ from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# --- ESSA É A URL QUE RESOLVE O ERRO DE REDE (IPv4 FORÇADO) ---
-# Note que o host mudou para 'aws-0-sa-east-1.pooler.supabase.com'
-# E o usuário tem um ponto: 'postgres.zykgsosahlavullteema'
+# --- URL COM O USUÁRIO CORRETO PARA O POOLER (PORTA 6543) ---
 DATABASE_URL = "postgresql://postgres.zykgsosahlavullteema:8eb8lVhLxEZIQjU7@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?sslmode=require"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 

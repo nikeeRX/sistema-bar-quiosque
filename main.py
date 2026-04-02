@@ -4,9 +4,9 @@ from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# --- CONEXÃO AJUSTADA PARA RENDER (VIRGINIA) ---
-# Usando o Host oficial mas com um truque de URL para forçar o IPv4
-DATABASE_URL = "postgresql://postgres:8eb8lVhLxEZIQjU7@db.zykgsosahlavullteema.supabase.co:5432/postgres?sslmode=require"
+# --- CONEXÃO COM IP FIXO PARA VIRGINIA (US-EAST-1) ---
+# Esse IP ajuda o Render a achar o Supabase sem se perder no IPv6
+DATABASE_URL = "postgresql://postgres:8eb8lVhLxEZIQjU7@44.214.231.13:5432/postgres?sslmode=require"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 @app.get("/", response_class=HTMLResponse)
@@ -18,13 +18,13 @@ async def area_estoque():
         with engine.connect() as conn:
             produtos = conn.execute(text("SELECT * FROM produtos ORDER BY nome")).fetchall()
             if not produtos:
-                lista_html = "<tr><td colspan='4'>Nenhum produto no banco.</td></tr>"
+                lista_html = "<tr><td colspan='4' style='padding:10px;'>Nenhum produto no banco.</td></tr>"
             for p in produtos:
                 promo_tag = "<b style='color:#e21c21;'>[PROMO]</b>" if p.em_promocao else ""
-                lista_html += f"<tr><td>{p.codigo_barras}</td><td>{p.nome} {promo_tag}</td><td>R$ {p.preco_venda}</td><td>{p.estoque_atual}</td></tr>"
+                lista_html += f"<tr><td style='padding:10px;'>{p.codigo_barras}</td><td style='padding:10px;'>{p.nome} {promo_tag}</td><td style='padding:10px;'>R$ {p.preco_venda}</td><td style='padding:10px;'>{p.estoque_atual}</td></tr>"
     except Exception as e:
-        status_conexao = f"<b style='color:red;'>❌ Erro de Conexão: {str(e)}</b>"
-        lista_html = "<tr><td colspan='4'>Erro ao carregar dados.</td></tr>"
+        status_conexao = f"<b style='color:red;'>❌ Erro de Conexão: {str(e)[:50]}...</b>"
+        lista_html = "<tr><td colspan='4' style='padding:10px;'>Erro ao carregar dados. Tente atualizar a página.</td></tr>"
 
     return f"""
     <body style="background:#004795; color:white; font-family:Arial; padding:20px; margin:0;">
@@ -38,7 +38,7 @@ async def area_estoque():
             <form action="/cadastrar" method="post" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
                 <input name="cod" placeholder="Código de Barras" required style="padding:10px;">
                 <input name="nome" placeholder="Nome do Produto" required style="padding:10px;">
-                <input name="preco" placeholder="Preço (Ex: 15.90)" required style="padding:10px;">
+                <input name="preco" placeholder="Preço (Ex: 15,90)" required style="padding:10px;">
                 <input name="qtd" placeholder="Qtd Inicial" type="number" required style="padding:10px;">
                 <label style="display:flex; align-items:center; gap:5px;"><input type="checkbox" name="promo"> Em Promoção?</label>
                 <button style="background:#28a745; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer; padding:10px;">SALVAR PRODUTO</button>
@@ -59,11 +59,14 @@ async def area_estoque():
     """
 
 @app.post("/cadastrar")
-async def cadastrar(cod: str = Form(...), nome: str = Form(...), preco: float = Form(...), qtd: int = Form(...), promo: bool = Form(False)):
+async def cadastrar(cod: str = Form(...), nome: str = Form(...), preco: str = Form(...), qtd: int = Form(...), promo: bool = Form(False)):
     try:
+        # TRATAMENTO DA VÍRGULA: Transforma 15,90 em 15.90 antes de salvar
+        preco_limpo = float(preco.replace(',', '.'))
+        
         with engine.begin() as conn:
             conn.execute(text("INSERT INTO produtos (codigo_barras, nome, preco_venda, estoque_atual, em_promocao) VALUES (:c, :n, :p, :q, :pr)"),
-                         {"c":cod, "n":nome, "p":preco, "q":qtd, "pr":promo})
+                         {"c":cod, "n":nome, "p":preco_limpo, "q":qtd, "pr":promo})
         return RedirectResponse(url="/", status_code=303)
     except Exception as e:
-        return f"<h3>Erro ao salvar:</h3><p>{str(e)}</p><a href='/'>Voltar</a>"
+        return f"<h3>Erro ao salvar:</h3><p>{str(e)}</p><a href='/'>Voltar e tentar usar PONTO no preço</a>"

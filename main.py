@@ -11,122 +11,100 @@ app.add_middleware(SessionMiddleware, secret_key="brahma_riacho_secret")
 DATABASE_URL = "postgresql://postgres:GNlZnHiuKAcFnpgXhwILfigqKCNkaHqx@interchange.proxy.rlwy.net:44559/railway"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
-# --- CRIAÇÃO AUTOMÁTICA DAS TABELAS ---
-with engine.begin() as conn:
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS clientes (
-            id SERIAL PRIMARY KEY,
-            nome_completo TEXT NOT NULL,
-            cpf TEXT UNIQUE NOT NULL,
-            rg_id TEXT,
-            data_nascimento DATE,
-            contato TEXT,
-            data_cadastro DATE DEFAULT CURRENT_DATE
-        );
-        CREATE TABLE IF NOT EXISTS pulseiras (
-            id SERIAL PRIMARY KEY,
-            numero_pulseira TEXT UNIQUE NOT NULL,
-            cliente_cpf TEXT REFERENCES clientes(cpf),
-            status TEXT DEFAULT 'ativa',
-            total_conta DECIMAL(10,2) DEFAULT 7.00
-        );
-    """))
-
 CSS = """
 <style>
-    :root { --azul-brahma: #004795; --vermelho-brahma: #e21c21; --dourado: #f0ba00; --gelo: #e8ecef; }
-    body { font-family: 'Segoe UI', Arial; background: #1a4a8e; margin: 0; color: white; height: 100vh; overflow: hidden; }
-    .viewport { display: grid; grid-template-columns: 280px 1fr 320px; height: calc(100vh - 60px); padding: 15px; gap: 15px; }
-    .sidebar { display: flex; flex-direction: column; gap: 10px; }
-    .cat-button { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); padding: 15px; border-radius: 12px; 
-                  display: flex; align-items: center; color: white; text-decoration: none; font-weight: bold; position: relative; }
-    .cat-button:hover, .cat-active { background: white; color: var(--azul-brahma); }
-    .product-grid { background: rgba(255,255,255,0.05); border-radius: 15px; padding: 20px; display: grid; 
-                    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; overflow-y: auto; }
-    .product-card { background: white; border-radius: 12px; overflow: hidden; text-align: center; color: #333; cursor: pointer; }
-    .product-info { background: var(--vermelho-brahma); color: white; padding: 10px; font-weight: bold; }
-    .comanda-panel { background: white; border-radius: 15px; color: #333; display: flex; flex-direction: column; }
-    .comanda-header { background: var(--azul-brahma); color: white; padding: 15px; text-align: center; font-weight: bold; }
-    .function-bar { height: 60px; background: #002d5f; display: flex; align-items: center; justify-content: space-around; font-weight: bold; }
-    input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+    :root { --azul: #004795; --vermelho: #e21c21; --dourado: #f0ba00; --gelo: #f4f4f4; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial; background: var(--azul); margin: 0; color: white; min-height: 100vh; display: flex; flex-direction: column; }
+    
+    .main-container { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .card { background: white; color: #333; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 100%; max-width: 500px; text-align: center; }
+    
+    .btn { display: block; width: 100%; padding: 15px; margin: 10px 0; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; text-decoration: none; font-size: 16px; transition: 0.2s; }
+    .btn-azul { background: var(--azul); color: white; }
+    .btn-vermelho { background: var(--vermelho); color: white; }
+    
+    input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
+    
+    .footer-atallhos { background: #002d5f; padding: 10px; display: flex; justify-content: space-around; font-size: 13px; font-weight: bold; }
+    
+    /* Layout de Vendas Responsivo */
+    .vendas-wrapper { display: flex; flex-wrap: wrap; gap: 20px; width: 100%; max-width: 1200px; }
+    .menu-lateral { flex: 1; min-width: 250px; }
+    .grade-produtos { flex: 2; min-width: 300px; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    .prod-item { background: white; color: #333; padding: 10px; border-radius: 10px; text-align: center; cursor: pointer; border: 2px solid transparent; }
+    .prod-item:hover { border-color: var(--vermelho); }
 </style>
 """
 
 @app.get("/", response_class=HTMLResponse)
 async def login_page():
-    return f"<html><head>{CSS}</head><body style='display:flex; align-items:center; justify-content:center; height:100vh;'><div style='background:white; padding:30px; border-radius:15px; color:#333; text-align:center; width:350px;'><img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' width='120'><h2>PDV Riacho Mall</h2><form action='/login' method='post'><input name='user' placeholder='Usuário'><input name='pw' type='password' placeholder='Senha'><button style='background:var(--azul-brahma); color:white; width:100%; padding:15px; border:none; border-radius:5px; font-weight:bold; cursor:pointer;'>ENTRAR</button></form></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='main-container'><div class='card'><img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' width='120'><h2>Acesso Restrito</h2><form action='/login' method='post'><input name='user' placeholder='Usuário'><input name='pw' type='password' placeholder='Senha'><button class='btn btn-azul'>ENTRAR</button></form></div></div></body></html>"
 
 @app.post("/login")
 async def login(request: Request, user: str = Form(...), pw: str = Form(...)):
     if (user == "admin" and pw == "1234") or (user == "garcom" and pw == "chopp") or (user == "portaria" and pw == "riacho"):
         request.session["user"] = user
-        return RedirectResponse(url="/vendas", status_code=303)
+        return RedirectResponse(url="/central", status_code=303)
     return RedirectResponse(url="/", status_code=303)
 
-@app.get("/vendas", response_class=HTMLResponse)
-async def vendas_interface(request: Request, cat: str = "Chopp"):
+@app.get("/central", response_class=HTMLResponse)
+async def central(request: Request):
     if "user" not in request.session: return RedirectResponse(url="/")
-    
-    # Produtos do seu Cardápio [cite: 17, 19, 88]
-    menu = {
-        "Chopp": [("Caneca 350ml", 11.90), ("Tulipa 700ml", 17.90), ("Torre 2.5L", 84.90)],
+    return f"<html><head>{CSS}</head><body><div class='main-container'><div class='card'><h3>Olá, {request.session['user'].capitalize()}</h3><a href='/cadastro' class='btn btn-vermelho'>➕ NOVO CADASTRO</a><a href='/vendas' class='btn btn-azul'>🛒 IR PARA VENDAS</a><br><a href='/' style='color:gray; text-decoration:none;'>Sair</a></div></div><div class='footer-atallhos'><span>F1: Menu</span><span>F3: Novo Cliente</span></div></body></html>"
+
+@app.get("/cadastro", response_class=HTMLResponse)
+async def tela_cadastro():
+    return f"""<html><head>{CSS}</head><body><div class='main-container'><div class='card' style='text-align:left;'><h2>Cadastro de Cliente</h2><form action='/salvar-abrir' method='post'>
+    <input name='nome' placeholder='Nome Completo' required>
+    <input name='cpf' placeholder='CPF (obrigatório)' required>
+    <input name='nasc' type='date' required>
+    <input name='fone' placeholder='Contato' required>
+    <input name='pulseira' placeholder='Nº DA PULSEIRA' required style='border: 2px solid orange; background: #fff3cd;'>
+    <button class='btn btn-vermelho'>SALVAR E ABRIR COMANDA</button>
+    </form><a href='/central' style='display:block; text-align:center; color:gray;'>Voltar</a></div></div></body></html>"""
+
+@app.post("/salvar-abrir")
+async def salvar_abrir(nome: str = Form(...), cpf: str = Form(...), pulseira: str = Form(...)):
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("INSERT INTO clientes (nome_completo, cpf) VALUES (:n, :c) ON CONFLICT (cpf) DO NOTHING"), {{"n":nome, "c":cpf}})
+            conn.execute(text("INSERT INTO pulseiras (numero_pulseira, cliente_cpf, total_conta) VALUES (:p, :c, 7.00)"), {{"p":pulseira, "c":cpf}})
+        return HTMLResponse(f"<script>alert('✅ Cadastro Sucesso! Pulseira {pulseira} ativa.'); window.location.href='/vendas';</script>")
+    except: return "Erro ao processar. Verifique se a pulseira já está em uso."
+
+@app.get("/vendas", response_class=HTMLResponse)
+async def tela_vendas(cat: str = "Chopps"):
+    # Itens extraídos do seu cardápio oficial [cite: 17, 19, 88]
+    menu = {{
+        "Chopps": [("Caneca 350ml", 11.90), ("Tulipa 700ml", 17.90), ("Torre 2.5L", 84.90)],
         "Cervejas": [("Original 600ml", 12.90), ("Spaten LN", 8.90), ("Heineken 600ml", 16.90)],
         "Petiscos": [("Batata Frita", 21.90), ("Frango Passarinho", 28.90), ("Carne de Sol", 54.90)]
-    }
-
+    }}
+    
     prod_html = ""
     for nome, preco in menu.get(cat, []):
-        prod_html += f"""
-        <div class="product-card" onclick="lancar('{nome}', {preco})">
-            <img src="https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png" style="width:60px; margin:20px;">
-            <div class="product-info">{nome}<br>R$ {preco}</div>
-        </div>"""
+        prod_html += f"<div class='prod-item' onclick='lancar(\"{{nome}}\", {{preco}})'><b>{{nome}}</b><br><span style='color:red'>R$ {{preco}}</span></div>"
 
-    return f"""
-    <html><head>{CSS}
+    return f"""<html><head>{CSS}
     <script>
-        function lancar(nome, preco) {{
-            let p = prompt("Digite o Nº da Pulseira:");
-            if(p) window.location.href = `/efetuar-venda?p=${{p}}&item=${{nome}}&v=${{preco}}`;
+        function lancar(n, v) {{
+            let p = prompt("Digite o Nº da Pulseira do Cliente:");
+            if(p) window.location.href = `/lancar?p=${{p}}&v=${{v}}`;
         }}
     </script>
-    </head><body>
-        <div class="viewport">
-            <div class="sidebar">
-                <a href="/vendas?cat=Chopp" class="cat-button {'cat-active' if cat=='Chopp' else ''}">🍺 CHOPP <span style="position:absolute; right:10px;">F1</span></a>
-                <a href="/vendas?cat=Cervejas" class="cat-button {'cat-active' if cat=='Cervejas' else ''}">🍾 CERVEJAS <span style="position:absolute; right:10px;">F2</span></a>
-                <a href="/vendas?cat=Petiscos" class="cat-button {'cat-active' if cat=='Petiscos' else ''}">🍟 PETISCOS <span style="position:absolute; right:10px;">F3</span></a>
-                <hr>
-                <a href="/cadastro-cliente" class="cat-button" style="background:var(--vermelho-brahma)">➕ NOVO CLIENTE</a>
-            </div>
-            <div class="product-grid">{prod_html}</div>
-            <div class="comanda-panel">
-                <div class="comanda-header">Comanda Atual (Mesa 04)</div>
-                <div style="flex:1; padding:15px; color:#999; text-align:center;">Selecione um item...</div>
-                <div style="padding:15px; border-top:1px solid #eee; color:#333;">
-                    <div style="display:flex; justify-content:space-between; font-size:20px; font-weight:bold;"><span>Total</span><span>R$ 0,00</span></div>
-                </div>
-            </div>
+    </head><body><div class='main-container'><div class='vendas-wrapper'>
+        <div class='menu-lateral'>
+            <a href='/vendas?cat=Chopps' class='btn btn-azul'>🍺 CHOPPS</a>
+            <a href='/vendas?cat=Cervejas' class='btn btn-azul'>🍾 CERVEJAS</a>
+            <a href='/vendas?cat=Petiscos' class='btn btn-azul'>🍟 PETISCOS</a>
+            <a href='/central' class='btn btn-vermelho'>VOLTAR</a>
         </div>
-        <div class="function-bar">
-            <span>F1: Menu Principal</span><span>F2: Consultar</span><span>F3: Novo Cliente</span><span>F12: Ajuda</span>
-        </div>
-    </body></html>
-    """
+        <div class='grade-produtos'>{{prod_html}}</div>
+    </div></div></body></html>"""
 
-@app.get("/efetuar-venda")
-async def efetuar_venda(p: str, item: str, v: float):
+@app.get("/lancar")
+async def lancar(p: str, v: float):
     with engine.begin() as conn:
-        conn.execute(text("UPDATE pulseiras SET total_conta = total_conta + :v WHERE numero_pulseira = :p"), {"v": v, "p": p})
-    return HTMLResponse(f"<script>alert('✅ {item} lançado!'); window.location.href='/vendas';</script>")
-
-@app.get("/cadastro-cliente", response_class=HTMLResponse)
-async def tela_cadastro():
-    return f"<html><head>{CSS}</head><body style='display:flex; align-items:center; justify-content:center; height:100vh;'><div style='background:white; padding:30px; border-radius:15px; color:#333; width:400px;'><h2>Novo Cadastro</h2><form action='/salvar' method='post'><input name='n' placeholder='Nome Completo' required><input name='c' placeholder='CPF' required><input name='p' placeholder='Nº Pulseira' required style='border:2px solid orange'><button style='background:var(--vermelho-brahma); color:white; width:100%; padding:15px; border:none; border-radius:5px; font-weight:bold; cursor:pointer;'>SALVAR E ABRIR (R$ 7,00)</button></form><br><a href='/vendas'>Voltar</a></div></body></html>"
-
-@app.post("/salvar")
-async def salvar(n: str = Form(...), c: str = Form(...), p: str = Form(...)):
-    with engine.begin() as conn:
-        conn.execute(text("INSERT INTO clientes (nome_completo, cpf) VALUES (:n, :c) ON CONFLICT (cpf) DO NOTHING"), {"n":n, "c":c})
-        conn.execute(text("INSERT INTO pulseiras (numero_pulseira, cliente_cpf, total_conta) VALUES (:p, :c, 7.00)"), {"p":p, "c":c})
-    return HTMLResponse("<script>alert('✅ Cliente Cadastrado!'); window.location.href='/vendas';</script>")
+        conn.execute(text("UPDATE pulseiras SET total_conta = total_conta + :v WHERE numero_pulseira = :p"), {{"v": v, "p": p}})
+    return HTMLResponse("<script>alert('✅ Lançado com sucesso!'); window.location.href='/vendas';</script>")

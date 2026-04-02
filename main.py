@@ -6,7 +6,7 @@ app = FastAPI()
 
 # --- CONEXÃO DEFINITIVA (AJUSTADA PARA O MODO TRANSACTION) ---
 # Substitua SUA_SENHA_NOVA pela senha que você resetou no passo anterior
-DATABASE_URL = "postgresql://postgres.zykgsosahlavullteema:Somdeboas23@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?sslmode=require"
+DATABASE_URL = "postgresql://postgres:Somdeboas23@db.zykgsosahlavullteema.supabase.co:5432/postgres"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 @app.get("/", response_class=HTMLResponse)

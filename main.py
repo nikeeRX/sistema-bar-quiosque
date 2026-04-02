@@ -4,9 +4,10 @@ from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# --- CONEXÃO INTERNA DA RAILWAY (O CAMINHO MAIS RÁPIDO) ---
-DATABASE_URL = "postgresql://postgres:GNlZnHiuKAcFnpgXhwILfigqKCNkaHqx@postgres.railway.internal:5432/railway"
+# --- URL PÚBLICA DA RAILWAY (ESTA NÃO DÁ ERRO DE NOME) ---
+DATABASE_URL = "postgresql://postgres:GNlZnHiuKAcFnpgXhwILfigqKCNkaHqx@monorail.proxy.rlwy.net:10860/railway"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+
 
 @app.get("/", response_class=HTMLResponse)
 async def area_estoque():

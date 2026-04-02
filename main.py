@@ -39,7 +39,7 @@ async def area_estoque():
     <body style="background:#f0f2f5; font-family:Arial; padding:20px;">
         <div style="max-width:1000px; margin:auto; background:white; padding:25px; border-radius:15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:3px solid #004795; padding-bottom:10px; margin-bottom:20px;">
-                <h1 style="color:#004795; margin:0;">🍺 Sistema de Estoque - Smart Bar</h1>
+                <h1 style="color:#004795; margin:0;">🍺 Sistema de Estoque - Quiosque Brahma Riacho Mall</h1>
                 {status_conexao}
             </div>
             

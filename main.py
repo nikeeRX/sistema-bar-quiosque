@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, text
 app = FastAPI()
 
 # --- URL PÚBLICA COM PORTA 5432 ---
-DATABASE_URL = "postgresql://postgres:GNlZnHiuKAcFnpgXhwILfigqKCNkaHqx@monorail.proxy.rlwy.net:5432/railway"
+DATABASE_URL = "postgresql://postgres:GNlZnHiuKAcFnpgXhwILfigqKCNkaHqx@interchange.proxy.rlwy.net:44559/railway"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 

@@ -4,8 +4,9 @@ from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# --- URL 100% LIMPA (PARA O PSYCOPG2 ACEITAR) ---
-DATABASE_URL = "postgresql://postgres.zykgsosahlavullteema:8eb8lVhLxEZIQjU7@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?sslmode=require"
+# --- CONEXÃO DIRETA (MAIS ROBUSTA PARA CASA) ---
+# Usuário volta a ser apenas 'postgres' e a porta é 5432
+DATABASE_URL = "postgresql://postgres:8eb8lVhLxEZIQjU7@db.zykgsosahlavullteema.supabase.co:5432/postgres?sslmode=require"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 @app.get("/", response_class=HTMLResponse)

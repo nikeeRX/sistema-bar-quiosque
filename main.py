@@ -4,8 +4,8 @@ from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# --- URL COM O USUÁRIO CORRETO PARA O POOLER (PORTA 6543) ---
-DATABASE_URL = "postgresql://postgres.zykgsosahlavullteema:8eb8lVhLxEZIQjU7@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?sslmode=require"
+# --- CONEXÃO INTERNA DA RAILWAY (O CAMINHO MAIS RÁPIDO) ---
+DATABASE_URL = "postgresql://postgres:GNlZnHiuKAcFnpgXhwILfigqKCNkaHqx@postgres.railway.internal:5432/railway"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 @app.get("/", response_class=HTMLResponse)
@@ -14,58 +14,78 @@ async def area_estoque():
     status_conexao = "<b style='color:green;'>✅ Banco Conectado</b>"
     
     try:
+        # Tenta buscar os produtos no banco da Railway
         with engine.connect() as conn:
             produtos = conn.execute(text("SELECT * FROM produtos ORDER BY nome")).fetchall()
             if not produtos:
-                lista_html = "<tr><td colspan='4' style='padding:10px;'>Nenhum produto no banco.</td></tr>"
+                lista_html = "<tr><td colspan='4' style='padding:15px; text-align:center;'>Nenhum item cadastrado ainda.</td></tr>"
             for p in produtos:
-                promo_tag = "<b style='color:#e21c21;'>[PROMO]</b>" if p.em_promocao else ""
-                lista_html += f"<tr><td style='padding:10px;'>{p.codigo_barras}</td><td style='padding:10px;'>{p.nome} {promo_tag}</td><td style='padding:10px;'>R$ {p.preco_venda}</td><td style='padding:10px;'>{p.estoque_atual}</td></tr>"
+                lista_html += f"""
+                <tr style='border-bottom: 1px solid #ddd;'>
+                    <td style='padding:12px;'>{p.codigo_barras}</td>
+                    <td style='padding:12px;'><b>{p.nome}</b></td>
+                    <td style='padding:12px; color:#28a745; font-weight:bold;'>R$ {p.preco_venda}</td>
+                    <td style='padding:12px;'>{p.estoque_atual} un.</td>
+                </tr>
+                """
     except Exception as e:
-        status_conexao = f"<b style='color:red;'>❌ Erro de Conexão: {str(e)[:50]}...</b>"
-        lista_html = "<tr><td colspan='4' style='padding:10px;'>Erro ao carregar dados. Tente atualizar a página.</td></tr>"
+        # Se der erro, ele avisa na tela o motivo
+        status_conexao = f"<b style='color:red;'>❌ Erro de Conexão: {str(e)[:40]}...</b>"
+        lista_html = "<tr><td colspan='4' style='padding:20px; color:red;'>Erro ao ler o banco. Verifique se a tabela 'produtos' foi criada.</td></tr>"
 
     return f"""
-    <body style="background:#004795; color:white; font-family:Arial; padding:20px; margin:0;">
-        <div style="max-width:900px; margin:auto; background:white; color:#333; padding:25px; border-radius:15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:3px solid #f0ba00; padding-bottom:10px;">
-                <h1 style="color:#004795; margin:0;">📦 Painel de Estoque</h1>
+    <body style="background:#f0f2f5; color:#333; font-family: 'Segoe UI', Arial; padding:20px; margin:0;">
+        <div style="max-width:900px; margin:auto; background:white; padding:30px; border-radius:15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:3px solid #004795; padding-bottom:15px; margin-bottom:25px;">
+                <h1 style="color:#004795; margin:0;">🍻 Quiosque Smart - Estoque</h1>
                 <div>{status_conexao}</div>
             </div>
             
-            <h3 style="margin-top:20px;">Cadastrar Novo Item</h3>
-            <form action="/cadastrar" method="post" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
-                <input name="cod" placeholder="Código de Barras" required style="padding:10px;">
-                <input name="nome" placeholder="Nome do Produto" required style="padding:10px;">
-                <input name="preco" placeholder="Preço (Ex: 15,90)" required style="padding:10px;">
-                <input name="qtd" placeholder="Qtd Inicial" type="number" required style="padding:10px;">
-                <label style="display:flex; align-items:center; gap:5px;"><input type="checkbox" name="promo"> Em Promoção?</label>
-                <button style="background:#28a745; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer; padding:10px;">SALVAR PRODUTO</button>
+            <h3 style="color:#555;">Novo Produto</h3>
+            <form action="/cadastrar" method="post" style="display:grid; grid-template-columns: 2fr 2fr 1fr 1fr 1fr; gap:10px; margin-bottom:30px;">
+                <input name="cod" placeholder="Cód. Barras" required style="padding:12px; border:1px solid #ccc; border-radius:5px;">
+                <input name="nome" placeholder="Nome do Item" required style="padding:12px; border:1px solid #ccc; border-radius:5px;">
+                <input name="preco" placeholder="Preço (ex: 12,50)" required style="padding:12px; border:1px solid #ccc; border-radius:5px;">
+                <input name="qtd" type="number" placeholder="Qtd" required style="padding:12px; border:1px solid #ccc; border-radius:5px;">
+                <button style="background:#28a745; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">CADASTRAR</button>
             </form>
 
-            <h3 style="margin-top:30px;">Inventário Real</h3>
-            <table border="1" style="width:100%; border-collapse:collapse; text-align:left;">
-                <tr style="background:#f0ba00; color:#004795;">
-                    <th style="padding:10px;">Cód</th>
-                    <th style="padding:10px;">Descrição</th>
-                    <th style="padding:10px;">Valor</th>
-                    <th style="padding:10px;">Estoque</th>
-                </tr>
-                {lista_html}
+            <h3 style="color:#555;">Produtos no Sistema</h3>
+            <table style="width:100%; border-collapse:collapse; background:white;">
+                <thead>
+                    <tr style="background:#004795; color:white; text-align:left;">
+                        <th style="padding:12px;">Código</th>
+                        <th style="padding:12px;">Nome</th>
+                        <th style="padding:12px;">Preço Venda</th>
+                        <th style="padding:12px;">Qtd Estoque</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {lista_html}
+                </tbody>
             </table>
         </div>
     </body>
     """
 
 @app.post("/cadastrar")
-async def cadastrar(cod: str = Form(...), nome: str = Form(...), preco: str = Form(...), qtd: int = Form(...), promo: bool = Form(False)):
+async def cadastrar(cod: str = Form(...), nome: str = Form(...), preco: str = Form(...), qtd: int = Form(...)):
     try:
-        # TRATAMENTO DA VÍRGULA: Transforma 15,90 em 15.90 antes de salvar
-        preco_limpo = float(preco.replace(',', '.'))
+        # TRATAMENTO: Aceita vírgula e transforma em ponto para o banco entender
+        preco_formatado = float(preco.replace(',', '.'))
         
         with engine.begin() as conn:
-            conn.execute(text("INSERT INTO produtos (codigo_barras, nome, preco_venda, estoque_atual, em_promocao) VALUES (:c, :n, :p, :q, :pr)"),
-                         {"c":cod, "n":nome, "p":preco_limpo, "q":qtd, "pr":promo})
+            conn.execute(
+                text("INSERT INTO produtos (codigo_barras, nome, preco_venda, estoque_atual) VALUES (:c, :n, :p, :q)"),
+                {"c": cod, "n": nome, "p": preco_formatado, "q": qtd}
+            )
         return RedirectResponse(url="/", status_code=303)
     except Exception as e:
-        return f"<h3>Erro ao salvar:</h3><p>{str(e)}</p><a href='/'>Voltar e tentar usar PONTO no preço</a>"
+        return f"""
+        <body style="font-family:Arial; text-align:center; padding:50px;">
+            <h2 style="color:red;">Erro ao salvar produto!</h2>
+            <p>{str(e)}</p>
+            <a href="/" style="background:#004795; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Voltar e Corrigir</a>
+        </body>
+        """

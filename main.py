@@ -4,8 +4,9 @@ from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# --- CONEXÃO VIA POOLER (PORTA 6543) PARA RESOLVER O ERRO DE REDE ---
-DATABASE_URL = "postgresql://postgres.zykgsosahlavullteema:8eb8lVhLxEZIQjU7@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?sslmode=require"
+# --- CONEXÃO AJUSTADA (MODO TRANSACTION / PORTA 6543) ---
+# Note o ponto entre postgres e o ID do seu projeto:
+DATABASE_URL = "postgresql://postgres.zykgsosahlavullteema:8eb8lVhLxEZIQjU7@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?sslmode=require&prepare_threshold=0"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 @app.get("/", response_class=HTMLResponse)

@@ -4,8 +4,9 @@ from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# Na Railway, a conexão padrão funciona de primeira!
-DATABASE_URL = "postgresql://postgres:8eb8lVhLxEZIQjU7@db.zykgsosahlavullteema.supabase.co:5432/postgres?sslmode=require"
+# --- URL CORINGA PARA RENDER VIRGINIA ---
+# Usando o pooler oficial que converte IPv6 em IPv4 automaticamente
+DATABASE_URL = "postgresql://postgres.zykgsosahlavullteema:8eb8lVhLxEZIQjU7@aws-0-sa-east-1.pooler.supabase.com:5432/postgres?sslmode=require"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 @app.get("/", response_class=HTMLResponse)

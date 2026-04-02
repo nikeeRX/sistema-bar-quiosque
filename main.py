@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# --- SUA URL DA RAILWAY (Mantenha a que deu certo!) ---
+# --- USE A SUA URL QUE FUNCIONOU (EXEMPLO ABAIXO) ---
 DATABASE_URL = "postgresql://postgres:GNlZnHiuKAcFnpgXhwILfigqKCNkaHqx@interchange.proxy.rlwy.net:44559/railway"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
@@ -28,7 +28,7 @@ async def area_estoque():
                     <td style='padding:12px; display:flex; gap:5px;'>
                         <form action='/ajustar/{p.id}/mais' method='post'><button style='background:#28a745; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:3px;'>+</button></form>
                         <form action='/ajustar/{p.id}/menos' method='post'><button style='background:#ffc107; color:black; border:none; padding:5px 10px; cursor:pointer; border-radius:3px;'>-</button></form>
-                        <form action='/deletar/{p.id}' method='post'><button style='background:#dc3545; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:3px;'>🗑️</button></form>
+                        <form action='/deletar/{p.id}' method='post' onsubmit="return confirm('Tem certeza?')"><button style='background:#dc3545; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:3px;'>🗑️</button></form>
                     </td>
                 </tr>
                 """
@@ -36,25 +36,25 @@ async def area_estoque():
         status_conexao = f"<b style='color:red;'>❌ Erro: {str(e)[:30]}</b>"
 
     return f"""
-    <body style="background:#f0f2f5; font-family:Arial; padding:20px;">
+    <body style="background:#f0f2f5; font-family:Arial; padding:20px; margin:0;">
         <div style="max-width:1000px; margin:auto; background:white; padding:25px; border-radius:15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:3px solid #004795; padding-bottom:10px; margin-bottom:20px;">
-                <h1 style="color:#004795; margin:0;">🍺 Sistema de Estoque - Quiosque Brahma Riacho Mall</h1>
+                <h1 style="color:#004795; margin:0;">🍺 Quiosque Brahma Riacho Mall - Gestão de Estoque</h1>
                 {status_conexao}
             </div>
             
-            <h3>Cadastrar Novo Item</h3>
-            <form action="/cadastrar" method="post" style="display:grid; grid-template-columns: 2fr 2fr 1fr 1fr 1fr; gap:10px; margin-bottom:30px;">
-                <input name="cod" placeholder="Cód. Barras" required style="padding:10px; border-radius:5px; border:1px solid #ccc;">
-                <input name="nome" placeholder="Produto" required style="padding:10px; border-radius:5px; border:1px solid #ccc;">
-                <input name="preco" placeholder="Preço (6,50)" required style="padding:10px; border-radius:5px; border:1px solid #ccc;">
-                <input name="qtd" type="number" placeholder="Qtd" required style="padding:10px; border-radius:5px; border:1px solid #ccc;">
+            <h3 style="margin-top:0;">Cadastrar Item do Cardápio</h3>
+            <form action="/cadastrar" method="post" style="display:grid; grid-template-columns: 1fr 2fr 1fr 1fr 1fr; gap:10px; margin-bottom:30px;">
+                <input name="cod" placeholder="Nº Menu (Ex: 22)" required style="padding:10px; border-radius:5px; border:1px solid #ccc;">
+                <input name="nome" placeholder="Nome (Ex: Chopp Brahma)" required style="padding:10px; border-radius:5px; border:1px solid #ccc;">
+                <input name="preco" placeholder="Preço (12,90)" required style="padding:10px; border-radius:5px; border:1px solid #ccc;">
+                <input name="qtd" type="number" placeholder="Qtd Inicial" required style="padding:10px; border-radius:5px; border:1px solid #ccc;">
                 <button style="background:#004795; color:white; border:none; border-radius:5px; font-weight:bold; cursor:pointer;">SALVAR</button>
             </form>
 
             <table style="width:100%; border-collapse:collapse;">
                 <tr style="background:#004795; color:white; text-align:left;">
-                    <th style="padding:12px;">Cód</th><th style="padding:12px;">Nome</th><th style="padding:12px;">Preço</th><th style="padding:12px;">Qtd</th><th style="padding:12px;">Ações</th>
+                    <th style="padding:12px;">Cód/Nº</th><th style="padding:12px;">Produto</th><th style="padding:12px;">Preço</th><th style="padding:12px;">Estoque</th><th style="padding:12px;">Ações</th>
                 </tr>
                 {lista_html}
             </table>

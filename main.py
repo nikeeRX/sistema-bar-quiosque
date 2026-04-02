@@ -4,7 +4,10 @@ from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# --- CONEXÃO PADRÃO RAILWAY -> SUPABASE ---
+# --- CONEXÃO LIMPA PARA RAILWAY ---
+# Host: db.zykgsosahlavullteema.supabase.co
+# Usuário: postgres
+# Porta: 5432
 DATABASE_URL = "postgresql://postgres:8eb8lVhLxEZIQjU7@db.zykgsosahlavullteema.supabase.co:5432/postgres?sslmode=require"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 

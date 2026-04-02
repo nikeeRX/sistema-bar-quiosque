@@ -4,11 +4,10 @@ from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# --- CONEXÃO LIMPA PARA RAILWAY ---
-# Host: db.zykgsosahlavullteema.supabase.co
-# Usuário: postgres
-# Porta: 5432
-DATABASE_URL = "postgresql://postgres:8eb8lVhLxEZIQjU7@db.zykgsosahlavullteema.supabase.co:5432/postgres?sslmode=require"
+# --- ESSA É A URL QUE RESOLVE O ERRO DE REDE (IPv4 FORÇADO) ---
+# Note que o host mudou para 'aws-0-sa-east-1.pooler.supabase.com'
+# E o usuário tem um ponto: 'postgres.zykgsosahlavullteema'
+DATABASE_URL = "postgresql://postgres.zykgsosahlavullteema:8eb8lVhLxEZIQjU7@aws-0-sa-east-1.pooler.supabase.com:6543/postgres?sslmode=require"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 @app.get("/", response_class=HTMLResponse)

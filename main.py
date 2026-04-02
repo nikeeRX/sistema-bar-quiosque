@@ -4,9 +4,8 @@ from sqlalchemy import create_engine, text
 
 app = FastAPI()
 
-# --- CONEXÃO COM IP FIXO PARA VIRGINIA (US-EAST-1) ---
-# Esse IP ajuda o Render a achar o Supabase sem se perder no IPv6
-DATABASE_URL = "postgresql://postgres:8eb8lVhLxEZIQjU7@44.214.231.13:5432/postgres?sslmode=require"
+# Na Railway, a conexão padrão funciona de primeira!
+DATABASE_URL = "postgresql://postgres:8eb8lVhLxEZIQjU7@db.zykgsosahlavullteema.supabase.co:5432/postgres?sslmode=require"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 @app.get("/", response_class=HTMLResponse)

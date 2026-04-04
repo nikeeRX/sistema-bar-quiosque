@@ -18,34 +18,30 @@ MENU_INICIAL = {
     "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
 }
 
-# --- CRIAÇÃO DAS TABELAS BÁSICAS ---
+# --- CRIAÇÃO DAS TABELAS BÁSICAS MANTENDO OS DADOS INTACTOS ---
 with engine.begin() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS clientes (id SERIAL PRIMARY KEY, nome_completo TEXT NOT NULL, cpf TEXT UNIQUE NOT NULL, data_nascimento DATE, contato TEXT, email TEXT);
         CREATE TABLE IF NOT EXISTS pulseiras (id SERIAL PRIMARY KEY, numero_pulseira TEXT NOT NULL, cliente_cpf TEXT REFERENCES clientes(cpf), total_conta DECIMAL(10,2) DEFAULT 7.00);
         CREATE TABLE IF NOT EXISTS vendas_itens (id SERIAL PRIMARY KEY, pulseira_num TEXT, item_nome TEXT, valor DECIMAL(10,2), data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME);
+        CREATE TABLE IF NOT EXISTS produtos (id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL);
     """))
 
+# Tenta criar as colunas novas sem destruir a tabela
 MIGRACOES = [
-    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
-    "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
-    "ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;"
+    "ALTER TABLE pulseiras ADD COLUMN status TEXT DEFAULT 'ABERTA';",
+    "ALTER TABLE vendas_itens ADD COLUMN status TEXT DEFAULT 'ABERTA';",
+    "ALTER TABLE pulseiras DROP CONSTRAINT pulseiras_numero_pulseira_key;",
+    "ALTER TABLE produtos ADD COLUMN categoria TEXT DEFAULT 'OUTROS';",
+    "ALTER TABLE produtos ADD COLUMN preco DECIMAL(10,2) DEFAULT 0.00;",
+    "ALTER TABLE produtos ADD COLUMN estoque INT DEFAULT 0;"
 ]
 for mig in MIGRACOES:
     try:
         with engine.begin() as conn: conn.execute(text(mig))
     except Exception: pass
 
-try:
-    with engine.begin() as conn:
-        conn.execute(text("DROP TABLE IF EXISTS produtos CASCADE;"))
-        conn.execute(text("""
-            CREATE TABLE produtos (
-                id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL, categoria TEXT DEFAULT 'OUTROS', preco DECIMAL(10,2) DEFAULT 0.00, estoque INT DEFAULT 0
-            );
-        """))
-except Exception: pass
-
+# Insere os produtos originais APENAS se eles não existirem (não apaga os seus novos!)
 try:
     with engine.begin() as conn:
         for cat, itens in MENU_INICIAL.items():
@@ -226,7 +222,7 @@ async def novo_produto(request: Request):
         except: q_val = 0
         
         with engine.begin() as conn:
-            conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, :q)"), {"n": nome, "c": cat, "p": p_val, "q": q_val})
+            conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, :q) ON CONFLICT (nome) DO NOTHING"), {"n": nome, "c": cat, "p": p_val, "q": q_val})
         return RedirectResponse(url="/estoque", status_code=303)
     except Exception as e:
         return HTMLResponse(f"<script>alert('Erro ao salvar produto. Verifique se o nome já existe! Detalhe: {e}'); window.history.back();</script>")
@@ -385,7 +381,6 @@ async def lancar_pedido(request: Request):
                 conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor, status) VALUES (:p, :n, :v, 'ABERTA')"), {"p": p, "n": i['n'], "v": i['v']})
                 conn.execute(text("UPDATE produtos SET estoque = GREATEST(COALESCE(estoque, 0) - 1, 0) WHERE nome = :n"), {"n": i['n']})
                 
-                # Formatação de linha estilo Bar do Cuscuz
                 nome_formatado = i['n'][:22]
                 linhas_cupom += f"<div>{nome_formatado}<br>{1} x {float(i['v']):.2f} <span style='float:right'>{float(i['v']):.2f}</span></div>"
     except Exception: pass
@@ -427,15 +422,18 @@ async def fechar_conta(q: str = ""):
                         <div class='item-linha'><span>Subtotal Consumo:</span><span>R$ {subtotal:.2f}</span></div>
                         <div class='item-linha'><span>Taxa Serviço (10%):</span><span>R$ {taxa:.2f}</span></div>
                         <div class='item-linha' style='color:#062b5e;'>
-                            <span>Desconto (R$):</span>
-                            <input type='number' id='input_desconto' value='0' min='0' step='0.01' style='width:80px; text-align:right; border:1px solid #ccc; border-radius:3px; padding:2px;' oninput='calcDiv()'>
+                            <span style='padding-top:5px;'>Desconto (R$):</span>
+                            <div style='display:flex; gap:5px;'>
+                                <input type='number' id='input_desconto' value='0' min='0' step='0.01' style='width:70px; text-align:right; border:1px solid #ccc; border-radius:3px; padding:5px;' placeholder='0.00'>
+                                <button type='button' onclick='calcDiv()' style='background:#062b5e; color:white; border:none; border-radius:3px; padding:5px 10px; cursor:pointer; font-weight:bold;'>APLICAR</button>
+                            </div>
                         </div>
                         <div class='item-linha' style='font-weight:bold; font-size:20px; color:#d31a21; margin-top:10px;'>
                             <span>TOTAL A PAGAR:</span><span id='tot_final'>R$ {total_final:.2f}</span>
                         </div>
                         <div class='item-linha' style='margin-top:10px;'>
                             <span>Dividir por:</span>
-                            <input type='number' id='divisores' value='1' min='1' style='width:60px; text-align:center; border:1px solid #ccc; border-radius:3px; font-weight:bold;' oninput='calcDiv()'>
+                            <input type='number' id='divisores' value='1' min='1' style='width:60px; text-align:center; border:1px solid #ccc; border-radius:3px; font-weight:bold; padding:5px;' oninput='calcDiv()'>
                         </div>
                         <div class='item-linha' style='font-weight:bold; font-size:18px;'>
                             <span>Por Pessoa:</span><span id='val_pessoa'>R$ {total_final:.2f}</span>
@@ -464,15 +462,18 @@ async def fechar_conta(q: str = ""):
                         function calcDiv() {{
                             let subtotal = {subtotal};
                             let taxa = {taxa};
-                            let desc = parseFloat(document.getElementById('input_desconto').value) || 0;
+                            // Pega o valor do desconto (substitui vírgula por ponto para não dar erro na matemática)
+                            let descInput = document.getElementById('input_desconto').value.replace(',', '.');
+                            let desc = parseFloat(descInput) || 0;
                             let div = parseInt(document.getElementById('divisores').value) || 1;
                             
                             let totFinal = subtotal + taxa - desc;
-                            if (totFinal < 0) totFinal = 0;
+                            if (totFinal < 0) totFinal = 0; // Não deixa o total ficar negativo
                             
                             document.getElementById('tot_final').innerText = "R$ " + totFinal.toFixed(2);
                             document.getElementById('val_pessoa').innerText = "R$ " + (totFinal / div).toFixed(2);
                             
+                            // Atualiza os dados invisíveis que vão para o Python
                             document.getElementById('input_div').value = div;
                             document.getElementById('input_desc_form').value = desc;
                         }}
@@ -509,7 +510,6 @@ async def confirmar_fechamento(request: Request):
             v_unit = float(i.tot) / i.qtd if i.qtd > 0 else 0
             linhas_cupom += f"<div>{nome_item}<br>{i.qtd} x {v_unit:.2f} <span style='float:right'>{float(i.tot or 0):.2f}</span></div>"
         
-        # O Couvert que é padrão no BD (sempre é 7 reais)
         linhas_cupom += f"<div>Couvert Artistico<br>1 x 7.00 <span style='float:right'>7.00</span></div>"
         
         subt = float(c_info.total_conta or 0)

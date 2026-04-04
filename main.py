@@ -11,6 +11,7 @@ app.add_middleware(SessionMiddleware, secret_key="brahma_riacho_mall_2024")
 DATABASE_URL = "postgresql://postgres:GNlZnHiuKAcFnpgXhwILfigqKCNkaHqx@interchange.proxy.rlwy.net:44559/railway"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
+# --- BLINDAGEM DO BANCO DE DADOS ---
 with engine.begin() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS clientes (
@@ -22,15 +23,16 @@ with engine.begin() as conn:
             total_conta DECIMAL(10,2) DEFAULT 7.00, status TEXT DEFAULT 'ABERTA'
         );
         CREATE TABLE IF NOT EXISTS vendas_itens (
-            id SERIAL PRIMARY KEY, pulseira_num TEXT, item_nome TEXT, valor DECIMAL(10,2),
-            data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME
+            id SERIAL PRIMARY KEY, pulseira_num TEXT, item_nome TEXT, valor DECIMAL(10,2)
         );
-        ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';
     """))
-    try:
-        conn.execute(text("ALTER TABLE pulseiras DROP CONSTRAINT pulseiras_numero_pulseira_key"))
-    except:
-        pass
+    # Ajustes seguros (Ignora erro se a coluna já existir)
+    try: conn.execute(text("ALTER TABLE pulseiras ADD COLUMN status TEXT DEFAULT 'ABERTA'"))
+    except: pass
+    try: conn.execute(text("ALTER TABLE pulseiras DROP CONSTRAINT pulseiras_numero_pulseira_key"))
+    except: pass
+    try: conn.execute(text("ALTER TABLE vendas_itens ADD COLUMN status TEXT DEFAULT 'ABERTA'"))
+    except: pass
 
 CSS = """
 <style>
@@ -41,7 +43,7 @@ CSS = """
     .btn-menu { background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 16px; cursor: pointer; text-decoration: none; display: flex; justify-content: space-between; }
     .btn-menu:hover, .btn-menu.ativo { background: #d31a21; border-color: white; }
     .main-area { flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; }
-    .logo-central { width: 160px; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }
+    .logo-central { width: 150px; margin-bottom: 20px; }
     .grid-produtos { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; width: 100%; max-width: 900px; }
     .prod-card { background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border: 2px solid #5a0407; border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 110px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
     .prod-card:hover { transform: scale(1.05); border-color: white; }
@@ -93,13 +95,14 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
     itens_html = ""
     if p:
         with engine.connect() as conn:
-            query_itens = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND data_venda = CURRENT_DATE GROUP BY item_nome"), {"p": p}).fetchall()
-            for r in query_itens: itens_html += f"<div class='item-linha'><span>{r.qtd}x {r.item_nome}</span><span>R$ {r.tot:.2f}</span></div>"
+            # AGORA BUSCA APENAS ITENS COM STATUS ABERTA! Evita o erro 500 de data.
+            query_itens = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall()
+            for r in query_itens: itens_html += f"<div class='item-linha'><span>{r.qtd}x {r.item_nome}</span><span>R$ {float(r.tot):.2f}</span></div>"
 
     comanda_display = f"""
         <div class='comanda-header'>PULSEIRA: {p if p else 'NENHUMA'}</div>
         <div class='comanda-body'>
-            <div class='secao-titulo'>Histórico Hoje</div>
+            <div class='secao-titulo'>Histórico de Consumo</div>
             {itens_html if p else "<div style='color:#999; text-align:center'>Defina a pulseira</div>"}
             <br>
             <div class='secao-titulo' style='color:#d31a21'>Novo Pedido</div>
@@ -117,7 +120,7 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
     <script>
         let cart = [];
         const p_num = new URLSearchParams(window.location.search).get("p");
-        function add(n, v){{ if(!p_num) return alert("Defina a pulseira!"); cart.push({{n, v}}); render(); }}
+        function add(n, v){{ if(!p_num) return alert("Defina a pulseira primeiro!"); cart.push({{n, v}}); render(); }}
         function render(){{
             let html = ""; let t = 0;
             cart.forEach((i, idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer'>X</b></span></div>`; t += i.v; }});
@@ -154,7 +157,7 @@ async def lancar_pedido(p: str = Form(...), itens: str = Form(...)):
     tot = sum(i['v'] for i in lista)
     with engine.begin() as conn:
         conn.execute(text("UPDATE pulseiras SET total_conta = total_conta + :t WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"t": tot, "p": p})
-        for i in lista: conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor) VALUES (:p, :n, :v)"), {"p": p, "n": i['n'], "v": i['v']})
+        for i in lista: conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor, status) VALUES (:p, :n, :v, 'ABERTA')"), {"p": p, "n": i['n'], "v": i['v']})
     return "ok"
 
 @app.get("/fechar_conta", response_class=HTMLResponse)
@@ -165,10 +168,12 @@ async def fechar_conta(q: str = ""):
         with engine.connect() as conn:
             query = conn.execute(text("SELECT p.numero_pulseira, p.total_conta, c.nome_completo FROM pulseiras p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE (p.numero_pulseira = :q OR c.cpf = :q) AND p.status = 'ABERTA'"), {"q": q}).fetchone()
             if query:
-                itens_q = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND data_venda = CURRENT_DATE GROUP BY item_nome"), {"p": query.numero_pulseira}).fetchall()
-                lista = "".join([f"<div class='item-linha'><span>{i.qtd}x {i.item_nome}</span><span>R$ {i.tot:.2f}</span></div>" for i in itens_q])
+                # BUSCA OS ITENS ABERTOS
+                itens_q = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": query.numero_pulseira}).fetchall()
+                lista = "".join([f"<div class='item-linha'><span>{i.qtd}x {i.item_nome}</span><span>R$ {float(i.tot):.2f}</span></div>" for i in itens_q])
                 lista += f"<div class='item-linha'><span>1x Couvert Artístico</span><span>R$ 7.00</span></div>"
-                subtotal = float(query.total_conta)
+                
+                subtotal = float(query.total_conta or 0)
                 taxa = subtotal * 0.10
                 total_final = subtotal + taxa
                 res = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; color:#333; margin-top:20px; text-align:left;'>
@@ -190,7 +195,9 @@ async def fechar_conta(q: str = ""):
 
 @app.post("/confirmar_fechamento")
 async def confirmar_fechamento(p: str = Form(...)):
-    with engine.begin() as conn: conn.execute(text("UPDATE pulseiras SET status = 'FECHADA' WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p})
+    with engine.begin() as conn: 
+        conn.execute(text("UPDATE pulseiras SET status = 'FECHADA' WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p})
+        conn.execute(text("UPDATE vendas_itens SET status = 'FECHADA' WHERE pulseira_num = :p AND status = 'ABERTA'"), {"p": p})
     return HTMLResponse("<script>alert('Conta Fechada com Sucesso!'); window.location.href='/central';</script>")
 
 @app.get("/buscar", response_class=HTMLResponse)
@@ -201,7 +208,7 @@ async def tela_busca(q: str = ""):
             query = conn.execute(text("SELECT nome_completo, cpf, data_nascimento FROM clientes WHERE nome_completo ILIKE :q OR cpf LIKE :q"), {"q": f"%{q}%"}).fetchall()
             for r in query:
                 is_bday = r.data_nascimento.strftime("%m-%d") == date.today().strftime("%m-%d") if r.data_nascimento else False
-                resultados += f"<tr><td>{r.nome_completo}{' 🎁' if is_bday else ''}</td><td><form action='/abrir' method='post' style='display:flex;gap:5px'><input type='hidden' name='cpf' value='{r.cpf}'><input class='input-padrao' name='p' placeholder='Nº Pulseira' required style='width:100px;margin:0'><button class='btn-acao' style='background:#d31a21;padding:8px;margin:0'>ABRIR</button></form></td></tr>"
+                resultados += f"<tr><td style='color:black'>{r.nome_completo}{' 🎁' if is_bday else ''}</td><td><form action='/abrir' method='post' style='display:flex;gap:5px'><input type='hidden' name='cpf' value='{r.cpf}'><input class='input-padrao' name='p' placeholder='Nº Pulseira' required style='width:100px;margin:0'><button class='btn-acao' style='background:#d31a21;padding:8px;margin:0'>ABRIR</button></form></td></tr>"
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><h2>Buscar Cliente</h2><form method='get'><input class='input-padrao' name='q' placeholder='Nome ou CPF' value='{q}'><button class='btn-acao'>PESQUISAR</button></form><table>{resultados}</table><br><a href='/central'>Voltar</a></div></div></body></html>"
 
 @app.post("/abrir")

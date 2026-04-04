@@ -18,7 +18,6 @@ MENU_INICIAL = {
     "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
 }
 
-# --- BLINDAGEM DO BANCO DE DADOS ---
 with engine.begin() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS clientes (
@@ -49,17 +48,14 @@ MIGRACOES = [
 
 for mig in MIGRACOES:
     try:
-        with engine.begin() as conn:
-            conn.execute(text(mig))
+        with engine.begin() as conn: conn.execute(text(mig))
     except Exception: pass
 
 try:
     with engine.begin() as conn:
-        qtd_prods = conn.execute(text("SELECT COUNT(*) FROM produtos")).scalar()
-        if qtd_prods == 0:
-            for cat, itens in MENU_INICIAL.items():
-                for n, p in itens:
-                    conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 0) ON CONFLICT (nome) DO NOTHING"), {"n": n, "c": cat, "p": p})
+        for cat, itens in MENU_INICIAL.items():
+            for n, p in itens:
+                conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 0) ON CONFLICT (nome) DO UPDATE SET categoria = EXCLUDED.categoria, preco = EXCLUDED.preco"), {"n": n, "c": cat, "p": p})
 except Exception: pass
 
 CSS = """
@@ -73,10 +69,10 @@ CSS = """
     .main-area { flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; }
     .logo-central { width: 140px; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }
     .grid-produtos { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; width: 100%; max-width: 900px; }
-    .prod-card { border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s; color: white; }
-    .prod-card:hover { transform: scale(1.05); border-color: white; border-width: 2px; border-style: solid; }
-    .bg-green { background: linear-gradient(180deg, #28a745 0%, #1e7e34 100%); border: 1px solid #145523; }
-    .bg-red { background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border: 1px solid #5a0407; opacity: 0.8; }
+    .prod-card { border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s; color: white; border-width: 2px; border-style: solid; }
+    .prod-card:hover { transform: scale(1.05); border-color: white; }
+    .bg-green { background: linear-gradient(180deg, #28a745 0%, #1e7e34 100%); border-color: #145523; }
+    .bg-red { background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border-color: #5a0407; opacity: 0.8; }
     .prod-card b { font-size: 14px; margin-bottom: 8px; text-shadow: 1px 1px 2px rgba(0,0,0,0.6); }
     .prod-card span { font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 5px; }
     .badge-estoque { font-size: 12px; margin-top: 8px; background: rgba(0,0,0,0.4); border-radius: 4px; padding: 3px; font-weight: bold; }
@@ -94,16 +90,16 @@ CSS = """
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
     
-    .cupom-bg { background: #e0e0e0; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px; margin: 0; font-family: 'Courier New', Courier, monospace; }
-    .cupom { width: 320px; font-size: 13px; font-weight: bold; text-transform: uppercase; background: #fffae6; padding: 20px; border: 1px dashed #ccc; box-shadow: 0 4px 10px rgba(0,0,0,0.2); color: #000; }
+    .cupom-bg { background-color: #fdf8c6 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px; margin: 0; font-family: 'Courier New', Courier, monospace; }
+    .cupom { width: 300px; font-size: 13px; font-weight: bold; text-transform: uppercase; background-color: #fdf8c6 !important; color: #000 !important; padding: 20px; border: 1px dashed #000; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
     .cupom-head { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
     .cupom-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
     .cupom-divider { border-top: 2px dashed #000; margin: 10px 0; }
-    .no-print { display: block; width: 320px; margin: 20px auto; text-align: center; background: #d31a21; color: white; padding: 15px; text-decoration: none; border-radius: 5px; font-family: sans-serif; font-size: 16px;}
+    .no-print { display: block; width: 300px; margin: 20px auto; text-align: center; background: #d31a21; color: white; padding: 15px; text-decoration: none; border-radius: 5px; font-family: sans-serif; font-size: 16px;}
     @media print { 
         .no-print { display: none !important; } 
-        body, .cupom-bg { background: white !important; margin: 0 !important; padding: 0 !important; } 
-        .cupom { width: 100% !important; box-shadow: none !important; border: none !important; background: white !important; }
+        body, .cupom-bg { background-color: #fdf8c6 !important; margin: 0 !important; padding: 0 !important; } 
+        .cupom { width: 100% !important; box-shadow: none !important; border: none !important; }
     }
 </style>
 """
@@ -130,17 +126,18 @@ async def central(request: Request):
 @app.get("/estoque", response_class=HTMLResponse)
 async def tela_estoque(request: Request):
     if "user" not in request.session or request.session["user"] != "admin": return RedirectResponse(url="/central")
-    with engine.connect() as conn:
-        prods_db = conn.execute(text("SELECT nome, categoria, preco, estoque FROM produtos ORDER BY categoria, nome")).fetchall()
-    
     linhas = ""
     curr_cat = ""
-    for r in prods_db:
-        if r.categoria != curr_cat:
-            linhas += f"<tr><td colspan='3' style='background:#082d5e; color:white; font-weight:bold;'>{r.categoria}</td></tr>"
-            curr_cat = r.categoria
-        e_val = int(r.estoque) if r.estoque is not None else 0
-        linhas += f"<tr><td style='color:black'>{r.nome} <br><small>R$ {float(r.preco):.2f}</small></td><td style='color:black; font-weight:bold; font-size:18px;'>{e_val}</td><td><form action='/att_estoque' method='post' style='display:flex;gap:5px;margin:0'><input type='hidden' name='i' value='{r.nome}'><input type='number' name='q' class='input-padrao' style='width:70px;margin:0;padding:5px' required><button class='btn-acao' style='background:#28a745;margin:0;padding:8px'>ADD</button></form></td></tr>"
+    with engine.connect() as conn:
+        prods_db = conn.execute(text("SELECT nome, categoria, preco, estoque FROM produtos ORDER BY categoria, nome")).fetchall()
+        for r in prods_db:
+            cat_val = r.categoria or "OUTROS"
+            p_val = float(r.preco or 0)
+            e_val = int(r.estoque or 0)
+            if cat_val != curr_cat:
+                linhas += f"<tr><td colspan='3' style='background:#082d5e; color:white; font-weight:bold;'>{cat_val}</td></tr>"
+                curr_cat = cat_val
+            linhas += f"<tr><td style='color:black'>{r.nome} <br><small>R$ {p_val:.2f}</small></td><td style='color:black; font-weight:bold; font-size:18px;'>{e_val}</td><td><form action='/att_estoque' method='post' style='display:flex;gap:5px;margin:0'><input type='hidden' name='i' value='{r.nome}'><input type='number' name='q' class='input-padrao' style='width:70px;margin:0;padding:5px' required><button class='btn-acao' style='background:#28a745;margin:0;padding:8px'>ADD</button></form></td></tr>"
     
     add_form = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; margin-bottom:20px; text-align:left; border:1px solid #ccc;'>
         <h3 style='margin-top:0; color:#d31a21;'>➕ CADASTRAR NOVO PRODUTO</h3>
@@ -161,7 +158,7 @@ async def tela_estoque(request: Request):
 @app.post("/novo_produto")
 async def novo_produto(nome: str = Form(...), cat: str = Form(...), preco: float = Form(...), qtd: int = Form(...)):
     with engine.begin() as conn:
-        conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, :q) ON CONFLICT (nome) DO NOTHING"), {"n": nome.strip(), "c": cat, "p": preco, "q": qtd})
+        conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, :q) ON CONFLICT (nome) DO UPDATE SET categoria = EXCLUDED.categoria, preco = EXCLUDED.preco"), {"n": nome.strip(), "c": cat, "p": preco, "q": qtd})
     return RedirectResponse(url="/estoque", status_code=303)
 
 @app.post("/att_estoque")
@@ -175,15 +172,16 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
     with engine.connect() as conn:
         lista_prods = conn.execute(text("SELECT nome, preco, estoque FROM produtos WHERE categoria = :c ORDER BY nome"), {"c": cat}).fetchall()
         for n, v, e in lista_prods:
-            e_val = int(e) if e is not None else 0
+            v_val = float(v or 0)
+            e_val = int(e or 0)
             cor = "bg-green" if e_val > 0 else "bg-red"
-            prods += f"<div class='prod-card {cor}' onclick='add(\"{n}\", {v}, {e_val})'><b>{n}</b><span>R$ {float(v):.2f}</span><div class='badge-estoque'>Estoque: {e_val}</div></div>"
+            prods += f"<div class='prod-card {cor}' onclick='add(\"{n}\", {v_val}, {e_val})'><b>{n}</b><span>R$ {v_val:.2f}</span><div class='badge-estoque'>Estoque: {e_val}</div></div>"
     
     itens_html = ""
     if p:
         with engine.connect() as conn:
             query_itens = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall()
-            for r in query_itens: itens_html += f"<div class='item-linha'><span>{r.qtd}x {r.item_nome}</span><span>R$ {float(r.tot):.2f}</span></div>"
+            for r in query_itens: itens_html += f"<div class='item-linha'><span>{r.qtd}x {r.item_nome}</span><span>R$ {float(r.tot or 0):.2f}</span></div>"
 
     comanda_display = f"""
         <div class='comanda-header'>PULSEIRA: {p if p else 'NENHUMA'}</div>
@@ -273,7 +271,7 @@ async def fechar_conta(q: str = ""):
             query = conn.execute(text("SELECT p.numero_pulseira, p.total_conta, c.nome_completo FROM pulseiras p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE (p.numero_pulseira = :q OR c.cpf = :q) AND p.status = 'ABERTA'"), {"q": q}).fetchone()
             if query:
                 itens_q = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": query.numero_pulseira}).fetchall()
-                lista = "".join([f"<div class='item-linha'><span>{i.qtd}x {i.item_nome}</span><span>R$ {float(i.tot):.2f}</span></div>" for i in itens_q])
+                lista = "".join([f"<div class='item-linha'><span>{i.qtd}x {i.item_nome}</span><span>R$ {float(i.tot or 0):.2f}</span></div>" for i in itens_q])
                 lista += f"<div class='item-linha'><span>1x Couvert Artístico</span><span>R$ 7.00</span></div>"
                 
                 subtotal = float(query.total_conta or 0)
@@ -316,7 +314,7 @@ async def confirmar_fechamento(p: str = Form(...), divisao: int = Form(1)):
         conn.execute(text("UPDATE vendas_itens SET status = 'FECHADA' WHERE pulseira_num = :p AND status = 'ABERTA'"), {"p": p})
 
     linhas_cupom = ""
-    for i in itens_q: linhas_cupom += f"<div class='cupom-row'><span>{i.qtd}x {i.item_nome}</span><span>{float(i.tot):.2f}</span></div>"
+    for i in itens_q: linhas_cupom += f"<div class='cupom-row'><span>{i.qtd}x {i.item_nome}</span><span>{float(i.tot or 0):.2f}</span></div>"
     linhas_cupom += f"<div class='cupom-row'><span>1x Couvert Artístico</span><span>7.00</span></div>"
     
     subt = float(c_info.total_conta or 0)

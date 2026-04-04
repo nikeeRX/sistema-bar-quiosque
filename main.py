@@ -11,6 +11,13 @@ app.add_middleware(SessionMiddleware, secret_key="brahma_riacho_mall_2024")
 DATABASE_URL = "postgresql://postgres:GNlZnHiuKAcFnpgXhwILfigqKCNkaHqx@interchange.proxy.rlwy.net:44559/railway"
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
+MENU_INICIAL = {
+    "CHOPP": [("Caneca 350ml", 11.9), ("Descartável 500ml", 13.9), ("Tulipa 700ml", 17.9), ("Torre 2.5L", 84.9), ("Torre 3.5L", 99.9)],
+    "CERVEJAS": [("Original 600ml", 12.9), ("Amstel 600ml", 12.0), ("Brahma Duplo Malte", 12.0), ("Heineken 600ml", 16.9), ("Spaten LN", 8.9), ("Corona LN", 10.0), ("Heineken LN", 10.0), ("Stella LN", 8.9), ("Heineken Zero", 10.0)],
+    "PETISCOS": [("Fritas", 21.9), ("Fritas c/ Queijo", 25.9), ("Fritas Cheddar/Bacon", 27.9), ("Kibe 10un", 34.9), ("Kibe c/ Queijo", 37.9), ("Frango Passarinho", 28.9), ("Carne Sol c/ Fritas", 54.9), ("Calabresa Acebolada", 22.9), ("Tábua Frios", 34.9)],
+    "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
+}
+
 with engine.begin() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS clientes (
@@ -25,12 +32,15 @@ with engine.begin() as conn:
             id SERIAL PRIMARY KEY, pulseira_num TEXT, item_nome TEXT, valor DECIMAL(10,2),
             data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME, status TEXT DEFAULT 'ABERTA'
         );
-        CREATE TABLE IF NOT EXISTS estoque (
-            item_nome TEXT UNIQUE NOT NULL, quantidade INT DEFAULT 0
+        CREATE TABLE IF NOT EXISTS produtos (
+            id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL, categoria TEXT, preco DECIMAL(10,2), estoque INT DEFAULT 0
         );
     """))
-    try: conn.execute(text("ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;"))
-    except: pass
+    qtd_prods = conn.execute(text("SELECT COUNT(*) FROM produtos")).scalar()
+    if qtd_prods == 0:
+        for cat, itens in MENU_INICIAL.items():
+            for n, p in itens:
+                conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 0) ON CONFLICT DO NOTHING"), {"n": n, "c": cat, "p": p})
 
 CSS = """
 <style>
@@ -43,10 +53,13 @@ CSS = """
     .main-area { flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; }
     .logo-central { width: 160px; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }
     .grid-produtos { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; width: 100%; max-width: 900px; }
-    .prod-card { background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border: 2px solid #5a0407; border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 110px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-    .prod-card:hover { transform: scale(1.05); border-color: white; }
-    .prod-card b { font-size: 14px; margin-bottom: 8px; }
-    .prod-card span { font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.2); padding: 5px; border-radius: 5px; }
+    .prod-card { border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s; color: white; }
+    .prod-card:hover { transform: scale(1.05); border-color: white; border-width: 2px; border-style: solid; }
+    .bg-green { background: linear-gradient(180deg, #28a745 0%, #1e7e34 100%); border: 1px solid #145523; }
+    .bg-red { background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border: 1px solid #5a0407; opacity: 0.8; }
+    .prod-card b { font-size: 14px; margin-bottom: 8px; text-shadow: 1px 1px 2px rgba(0,0,0,0.6); }
+    .prod-card span { font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 5px; }
+    .badge-estoque { font-size: 12px; margin-top: 8px; background: rgba(0,0,0,0.4); border-radius: 4px; padding: 3px; font-weight: bold; }
     .comanda-lateral { width: 340px; background: white; color: black; border-left: 5px solid #d31a21; display: flex; flex-direction: column; }
     .comanda-header { background: #d31a21; color: white; padding: 15px; font-weight: bold; text-align: center; font-size: 18px; }
     .comanda-body { flex: 1; overflow-y: auto; padding: 15px; background: #f9f9f9; }
@@ -55,29 +68,21 @@ CSS = """
     .comanda-footer { padding: 15px; background: white; border-top: 1px solid #ccc; }
     .btn-acao { display: block; width: 100%; padding: 15px; margin-bottom: 8px; border: none; border-radius: 5px; font-weight: bold; color: white; cursor: pointer; text-align: center; text-decoration: none; font-size: 14px; background: #062b5e; }
     .btn-acao:hover { background: #0d4b9c; }
-    .container-center { display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; overflow-y: auto;}
-    .card-center { background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 500px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); margin: auto; }
+    .container-center { display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; overflow-y: auto; }
+    .card-center { background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 600px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); margin: auto; }
     .input-padrao { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
     
-    .cupom-bg { background: #fff; color: #000; font-family: 'Courier New', Courier, monospace; height: auto; display: block; overflow: visible; padding: 20px; }
-    .cupom { width: 300px; margin: 0 auto; font-size: 13px; text-transform: uppercase; }
+    .cupom-bg { background: #fdf8c6; color: #000; font-family: 'Courier New', Courier, monospace; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px; margin: 0; }
+    .cupom { width: 320px; font-size: 14px; font-weight: bold; text-transform: uppercase; }
     .cupom-head { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
     .cupom-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
     .cupom-divider { border-top: 1px dashed #000; margin: 10px 0; }
-    .cupom-bold { font-weight: bold; font-size: 15px; }
-    .no-print { display: block; width: 300px; margin: 20px auto; text-align: center; background: #d31a21; color: white; padding: 15px; text-decoration: none; font-weight: bold; font-family: sans-serif; border-radius: 5px; }
+    .no-print { display: block; width: 320px; margin: 20px auto; text-align: center; background: #d31a21; color: white; padding: 15px; text-decoration: none; border-radius: 5px; }
     @media print { .no-print { display: none !important; } body { background: white; } }
 </style>
 """
-
-MENU = {
-    "CHOPP": [("Caneca 350ml", 11.9), ("Descartável 500ml", 13.9), ("Tulipa 700ml", 17.9), ("Torre 2.5L", 84.9), ("Torre 3.5L", 99.9)],
-    "CERVEJAS": [("Original 600ml", 12.9), ("Amstel 600ml", 12.0), ("Brahma Duplo Malte", 12.0), ("Heineken 600ml", 16.9), ("Spaten LN", 8.9), ("Corona LN", 10.0), ("Heineken LN", 10.0), ("Stella LN", 8.9), ("Heineken Zero", 10.0)],
-    "PETISCOS": [("Fritas", 21.9), ("Fritas c/ Queijo", 25.9), ("Fritas Cheddar/Bacon", 27.9), ("Kibe 10un", 34.9), ("Kibe c/ Queijo", 37.9), ("Frango Passarinho", 28.9), ("Carne Sol c/ Fritas", 54.9), ("Calabresa Acebolada", 22.9), ("Tábua Frios", 34.9)],
-    "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
-}
 
 @app.get("/", response_class=HTMLResponse)
 async def login_page():
@@ -99,23 +104,52 @@ async def central(request: Request):
 async def tela_estoque(request: Request):
     if "user" not in request.session or request.session["user"] != "admin": return RedirectResponse(url="/central")
     with engine.connect() as conn:
-        est = {r.item_nome: r.quantidade for r in conn.execute(text("SELECT item_nome, quantidade FROM estoque")).fetchall()}
+        prods_db = conn.execute(text("SELECT nome, categoria, preco, estoque FROM produtos ORDER BY categoria, nome")).fetchall()
+    
     linhas = ""
-    for cat, itens in MENU.items():
-        linhas += f"<tr><td colspan='3' style='background:#082d5e; color:white; font-weight:bold;'>{cat}</td></tr>"
-        for n, v in itens:
-            qtd = est.get(n, 0)
-            linhas += f"<tr><td style='color:black'>{n}</td><td style='color:black; font-weight:bold;'>{qtd}</td><td><form action='/att_estoque' method='post' style='display:flex;gap:5px;margin:0'><input type='hidden' name='i' value='{n}'><input type='number' name='q' class='input-padrao' style='width:70px;margin:0;padding:5px' required><button class='btn-acao' style='background:#28a745;margin:0;padding:8px'>ADD</button></form></td></tr>"
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><h2>Gestão de Estoque</h2><div style='max-height:400px; overflow-y:auto;'><table><tr><th style='color:black'>Item</th><th style='color:black'>Qtd</th><th style='color:black'>Ação</th></tr>{linhas}</table></div><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
+    curr_cat = ""
+    for r in prods_db:
+        if r.categoria != curr_cat:
+            linhas += f"<tr><td colspan='3' style='background:#082d5e; color:white; font-weight:bold;'>{r.categoria}</td></tr>"
+            curr_cat = r.categoria
+        linhas += f"<tr><td style='color:black'>{r.nome} <br><small>R$ {float(r.preco):.2f}</small></td><td style='color:black; font-weight:bold; font-size:18px;'>{r.estoque}</td><td><form action='/att_estoque' method='post' style='display:flex;gap:5px;margin:0'><input type='hidden' name='i' value='{r.nome}'><input type='number' name='q' class='input-padrao' style='width:70px;margin:0;padding:5px' required><button class='btn-acao' style='background:#28a745;margin:0;padding:8px'>ADD</button></form></td></tr>"
+    
+    add_form = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; margin-bottom:20px; text-align:left; border:1px solid #ccc;'>
+        <h3 style='margin-top:0; color:#d31a21;'>➕ CADASTRAR NOVO PRODUTO</h3>
+        <form action='/novo_produto' method='post' style='display:flex; flex-wrap:wrap; gap:10px;'>
+            <input name='nome' placeholder='Nome do Produto' class='input-padrao' style='flex:1; min-width:180px;' required>
+            <select name='cat' class='input-padrao' style='flex:1; min-width:130px;' required>
+                <option value='CHOPP'>CHOPP</option><option value='CERVEJAS'>CERVEJAS</option>
+                <option value='PETISCOS'>PETISCOS</option><option value='BEBIDAS'>BEBIDAS</option>
+            </select>
+            <input name='preco' type='number' step='0.01' placeholder='Preço (Ex: 15.90)' class='input-padrao' style='flex:1; min-width:120px;' required>
+            <input name='qtd' type='number' placeholder='Estoque Inicial' class='input-padrao' style='flex:1; min-width:120px;' required>
+            <button class='btn-acao' style='background:#062b5e; margin:0; width:100%;'>SALVAR PRODUTO</button>
+        </form>
+    </div>"""
+
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><h2>Gestão de Estoque</h2>{add_form}<div style='max-height:400px; overflow-y:auto;'><table><tr><th style='color:black'>Item</th><th style='color:black'>Qtd</th><th style='color:black'>Ação</th></tr>{linhas}</table></div><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
+
+@app.post("/novo_produto")
+async def novo_produto(nome: str = Form(...), cat: str = Form(...), preco: float = Form(...), qtd: int = Form(...)):
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, :q) ON CONFLICT (nome) DO NOTHING"), {"n": nome.strip(), "c": cat, "p": preco, "q": qtd})
+    return RedirectResponse(url="/estoque", status_code=303)
 
 @app.post("/att_estoque")
 async def att_estoque(i: str = Form(...), q: int = Form(...)):
-    with engine.begin() as conn: conn.execute(text("INSERT INTO estoque (item_nome, quantidade) VALUES (:i, :q) ON CONFLICT (item_nome) DO UPDATE SET quantidade = estoque.quantidade + :q"), {"i": i, "q": q})
+    with engine.begin() as conn: conn.execute(text("UPDATE produtos SET estoque = estoque + :q WHERE nome = :i"), {"i": i, "q": q})
     return RedirectResponse(url="/estoque", status_code=303)
 
 @app.get("/vendas", response_class=HTMLResponse)
 async def vendas(cat: str = "CHOPP", p: str = ""):
-    prods = "".join([f"<div class='prod-card' onclick='add(\"{n}\", {v})'><b>{n}</b><span>R$ {v:.2f}</span></div>" for n, v in MENU.get(cat, [])])
+    prods = ""
+    with engine.connect() as conn:
+        lista_prods = conn.execute(text("SELECT nome, preco, estoque FROM produtos WHERE categoria = :c ORDER BY nome"), {"c": cat}).fetchall()
+        for n, v, e in lista_prods:
+            cor = "bg-green" if e > 0 else "bg-red"
+            prods += f"<div class='prod-card {cor}' onclick='add(\"{n}\", {v}, {e})'><b>{n}</b><span>R$ {float(v):.2f}</span><div class='badge-estoque'>Estoque: {e}</div></div>"
+    
     itens_html = ""
     if p:
         with engine.connect() as conn:
@@ -142,10 +176,15 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
     return f"""<html><head>{CSS}
     <script>
         let cart = []; const p_num = new URLSearchParams(window.location.search).get("p");
-        function add(n, v){{ if(!p_num) return alert("Defina a pulseira primeiro!"); cart.push({{n, v}}); render(); }}
+        function add(n, v, e){{ 
+            if(!p_num) return alert("Defina a pulseira primeiro!"); 
+            let count = cart.filter(x => x.n === n).length;
+            if (count >= e) return alert("❌ Produto esgotado ou sem estoque suficiente!");
+            cart.push({{n, v}}); render(); 
+        }}
         function render(){{
             let html = ""; let t = 0;
-            cart.forEach((i, idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black;'>X</b></span></div>`; t += i.v; }});
+            cart.forEach((i, idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black; font-size:16px; margin-left:8px;'>X</b></span></div>`; t += i.v; }});
             document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = "R$ " + t.toFixed(2);
         }}
         function rem(idx) {{ cart.splice(idx, 1); render(); }}
@@ -182,15 +221,15 @@ async def lancar_pedido(p: str = Form(...), itens: str = Form(...)):
         conn.execute(text("UPDATE pulseiras SET total_conta = total_conta + :t WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"t": tot, "p": p})
         for i in lista:
             conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor, status) VALUES (:p, :n, :v, 'ABERTA')"), {"p": p, "n": i['n'], "v": i['v']})
-            conn.execute(text("INSERT INTO estoque (item_nome, quantidade) VALUES (:n, -1) ON CONFLICT (item_nome) DO UPDATE SET quantidade = estoque.quantidade - 1"), {"n": i['n']})
-            linhas_cupom += f"<div class='cupom-row'><span>1x {i['n']}</span><span>{i['v']:.2f}</span></div>"
+            conn.execute(text("UPDATE produtos SET estoque = GREATEST(estoque - 1, 0) WHERE nome = :n"), {"n": i['n']})
+            linhas_cupom += f"<div class='cupom-row'><span>1x {i['n']}</span><span>{float(i['v']):.2f}</span></div>"
     
     return f"""<html class='cupom-bg'><body onload='window.print();'><div class='cupom'>
         <div class='cupom-head'><b>QUIOSQUE CHOPP BRAHMA</b><br>TICKET DE PREPARO<br><br>PULSEIRA: {p}</div>
         <div class='cupom-row cupom-bold'><span>Qtd Item</span><span>Valor</span></div><div class='cupom-divider'></div>
         {linhas_cupom}
         <div class='cupom-divider'></div><div class='cupom-row cupom-bold'><span>TOTAL PEDIDO</span><span>R$ {tot:.2f}</span></div>
-        <div style='text-align:center; margin-top:15px;'>------------------------<br>VIA DO ESTABELECIMENTO</div>
+        <div style='text-align:center; margin-top:15px;'>------------------------<br>VIA DE PREPARO</div>
     </div></body></html>"""
 
 @app.get("/fechar_conta", response_class=HTMLResponse)
@@ -216,10 +255,10 @@ async def fechar_conta(q: str = ""):
                         <div class='item-linha'><span>Subtotal Consumo:</span><span>R$ {subtotal:.2f}</span></div>
                         <div class='item-linha'><span>Taxa Serviço (10%):</span><span>R$ {taxa:.2f}</span></div>
                         <div class='item-linha' style='font-weight:bold; font-size:20px; color:#d31a21'><span>TOTAL:</span><span>R$ {total_final:.2f}</span></div>
-                        <div class='item-linha' style='margin-top:10px;'><span>Dividir por:</span><input type='number' id='divisores' value='1' min='1' style='width:60px; text-align:center; border:1px solid #ccc; border-radius:3px;' oninput='calcDiv()'></div>
+                        <div class='item-linha' style='margin-top:10px;'><span>Dividir por:</span><input type='number' id='divisores' value='1' min='1' style='width:60px; text-align:center; border:1px solid #ccc; border-radius:3px; font-weight:bold;' oninput='calcDiv()'></div>
                         <div class='item-linha' style='font-weight:bold; font-size:18px;'><span>Por Pessoa:</span><span id='val_pessoa'>R$ {total_final:.2f}</span></div>
                     </div>
-                    <form action='/confirmar_fechamento' method='post' target='_blank' onsubmit='setTimeout(()=>window.location.href="/central", 1000)'>
+                    <form action='/confirmar_fechamento' method='post' target='_blank' onsubmit='setTimeout(()=>window.location.href="/central", 1500)'>
                         <input type='hidden' name='p' value='{query.numero_pulseira}'>
                         <input type='hidden' name='divisao' id='input_div' value='1'>
                         <button class='btn-acao' style='background:#28a745; font-size:18px; margin-top:15px;'>🖨️ CONFIRMAR E IMPRIMIR RECIBO</button>
@@ -258,10 +297,10 @@ async def confirmar_fechamento(p: str = Form(...), divisao: int = Form(1)):
         <div class='cupom-row cupom-bold'><span>Qtd Item</span><span>Valor</span></div><div class='cupom-divider'></div>
         {linhas_cupom}
         <div class='cupom-divider'></div>
-        <div class='cupom-row'><span>SUBTOTAL PRODUTOS:</span><span>{subt:.2f}</span></div>
-        <div class='cupom-row'><span>SERVICOS 10%:</span><span>{taxa:.2f}</span></div>
+        <div class='cupom-row'><span>SUBTOTAL:</span><span>{subt:.2f}</span></div>
+        <div class='cupom-row'><span>TAXA SERVICO 10%:</span><span>{taxa:.2f}</span></div>
         <div class='cupom-divider'></div>
-        <div class='cupom-row cupom-bold'><span>TOTAL:</span><span>{tot:.2f}</span></div>
+        <div class='cupom-row cupom-bold'><span>TOTAL A PAGAR:</span><span>{tot:.2f}</span></div>
         <div class='cupom-row' style='margin-top:10px;'><span>DIVIDIDO POR:</span><span>{divisao} PESSOA(S)</span></div>
         <div class='cupom-row cupom-bold'><span>VALOR POR PESSOA:</span><span>{val_div:.2f}</span></div>
         <div style='text-align:center; margin-top:20px;'>OBRIGADO E VOLTE SEMPRE!</div>

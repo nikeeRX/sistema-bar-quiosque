@@ -34,37 +34,36 @@ with engine.begin() as conn:
             data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME
         );
         CREATE TABLE IF NOT EXISTS produtos (
-            id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL,
-            categoria TEXT, preco DECIMAL(10,2) DEFAULT 0.00, estoque INT DEFAULT 0
+            id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL
         );
     """))
 
-MIGRACOES = [
-    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
-    "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
-    "ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;"
-]
-
-for mig in MIGRACOES:
-    try:
-        with engine.begin() as conn: conn.execute(text(mig))
-    except Exception: pass
-
-# --- RECUPERAR ITENS INVISÍVEIS E INSERIR CARDÁPIO INICIAL ---
+# Correções na tabela e recuperação de itens "perdidos"
 try:
     with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';"))
+        conn.execute(text("ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';"))
+        conn.execute(text("ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;"))
+        conn.execute(text("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'OUTROS';"))
+        conn.execute(text("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco DECIMAL(10,2) DEFAULT 0.00;"))
+        conn.execute(text("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque INT DEFAULT 0;"))
+        # Recupera itens invisíveis que não tinham categoria
+        conn.execute(text("UPDATE produtos SET categoria = 'OUTROS' WHERE categoria IS NULL OR categoria = '';"))
+        
+        # Insere o cardápio base se faltar algo
         for cat, itens in MENU_INICIAL.items():
             for n, p in itens:
-                conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 0) ON CONFLICT (nome) DO UPDATE SET categoria = COALESCE(produtos.categoria, EXCLUDED.categoria)"), {"n": n, "c": cat, "p": p})
-except Exception: pass
+                conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 0) ON CONFLICT (nome) DO NOTHING"), {"n": n, "c": cat, "p": p})
+except Exception as e:
+    print(f"Aviso BD: {e}")
 
 CSS = """
 <style>
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
     body { margin: 0; background: #0a3a7a; color: white; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
     .layout-vendas { display: flex; flex: 1; height: 100vh; }
-    .menu-lateral { width: 220px; padding: 20px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid rgba(255,255,255,0.1); background: #082d5e; }
-    .btn-menu { background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 16px; cursor: pointer; text-decoration: none; display: flex; justify-content: space-between; }
+    .menu-lateral { width: 220px; padding: 20px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid rgba(255,255,255,0.1); background: #082d5e; overflow-y:auto; }
+    .btn-menu { background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 15px; cursor: pointer; text-decoration: none; display: flex; justify-content: space-between; }
     .btn-menu:hover, .btn-menu.ativo { background: #d31a21; border-color: white; }
     .main-area { flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; }
     .logo-central { width: 140px; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }
@@ -105,15 +104,18 @@ CSS = """
 </style>
 """
 
-IMG_LOGO = "<img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' onerror=\"this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png'\" width='140' class='logo-central'>"
-IMG_LOGO_PEQ = "<img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' onerror=\"this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png'\" width='100' style='margin-bottom:10px;'>"
+IMG_LOGO = "<img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' alt='Brahma' width='140' class='logo-central'>"
+IMG_LOGO_PEQ = "<img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' alt='Brahma' width='100' style='margin-bottom:10px;'>"
 
 @app.get("/", response_class=HTMLResponse)
 async def login_page():
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO}<h2>Acesso Restrito</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form></div></div></body></html>"
 
 @app.post("/login")
-async def login(request: Request, user: str = Form(""), pw: str = Form("")):
+async def login(request: Request):
+    form = await request.form()
+    user = form.get("user", "")
+    pw = form.get("pw", "")
     if (user == "admin" and pw == "1234") or (user == "garcom" and pw == "chopp"):
         request.session["user"] = user
         return RedirectResponse(url="/central", status_code=303)
@@ -146,7 +148,7 @@ async def tela_estoque(request: Request):
                     <input type='number' name='q' class='input-padrao' style='width:50px; margin:0; padding:5px;' required>
                     <button class='btn-acao' style='background:#28a745; margin:0; padding:8px; width:auto;' title='Adicionar Estoque'>➕</button>
                 </form>
-                <button class='btn-acao' style='background:#ffc107; color:black; margin:0; padding:8px; width:auto;' title='Editar' onclick='editarProd("{r.nome}", {p_val})'>✏️</button>
+                <button class='btn-acao' style='background:#ffc107; color:black; margin:0; padding:8px; width:auto;' title='Editar' onclick='editarProd("{r.nome}", "{p_val:.2f}")'>✏️</button>
                 <form action='/excluir_produto' method='post' style='margin:0;' onsubmit='return confirm("Deseja realmente EXCLUIR o item {r.nome}?");'>
                     <input type='hidden' name='nome' value='{r.nome}'>
                     <button class='btn-acao' style='background:#d31a21; margin:0; padding:8px; width:auto;' title='Excluir'>🗑️</button>
@@ -173,51 +175,74 @@ async def tela_estoque(request: Request):
     return f"""<html><head>{CSS}
     <script>
         function editarProd(nomeAntigo, precoAtual) {{
-            let novoNome = prompt("Novo Nome do Produto (deixe igual se quiser manter):", nomeAntigo);
-            if (!novoNome || novoNome.trim() === "") return;
-            let novoPreco = prompt("Novo Preço (use ponto ou vírgula):", precoAtual);
-            if (!novoPreco || novoPreco.trim() === "") return;
+            let novoNome = prompt("Novo Nome do Produto:", nomeAntigo);
+            if (novoNome === null) return; // Se o usuário cancelar, para aqui.
+            
+            let novoPreco = prompt("Novo Preço (ex: 15.90 ou 15,90):", precoAtual);
+            if (novoPreco === null) return; // Se o usuário cancelar, para aqui.
             
             let f = document.createElement("form"); f.method = "POST"; f.action = "/editar_produto";
+            
             let i1 = document.createElement("input"); i1.name = "nome_antigo"; i1.value = nomeAntigo; f.appendChild(i1);
-            let i2 = document.createElement("input"); i2.name = "nome_novo"; i2.value = novoNome; f.appendChild(i2);
-            let i3 = document.createElement("input"); i3.name = "preco"; i3.value = novoPreco; f.appendChild(i3);
+            let i2 = document.createElement("input"); i2.name = "nome_novo"; i2.value = novoNome || nomeAntigo; f.appendChild(i2);
+            let i3 = document.createElement("input"); i3.name = "preco"; i3.value = novoPreco || precoAtual; f.appendChild(i3);
+            
             document.body.appendChild(f); f.submit();
         }}
     </script>
     </head><body><div class='container-center'><div class='card-center'><h2>Gestão de Estoque</h2>{add_form}<div style='max-height:400px; overflow-y:auto; border:1px solid #ddd;'><table><tr><th style='color:black'>Item</th><th style='color:black'>Qtd</th><th style='color:black'>Ação</th></tr>{linhas}</table></div><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"""
 
-@app.post("/novo_produto") # BLINDAGEM CONTRA ERRO 422
-async def novo_produto(nome: str = Form(""), cat: str = Form("OUTROS"), preco: str = Form("0"), qtd: str = Form("0")):
+@app.post("/novo_produto")
+async def novo_produto(request: Request):
+    form = await request.form()
+    nome = form.get("nome", "").strip()
+    cat = form.get("cat", "OUTROS")
+    preco = form.get("preco", "0").replace(",", ".")
+    qtd = form.get("qtd", "0")
+    
     if not nome: return RedirectResponse(url="/estoque", status_code=303)
-    try: p_val = float(preco.replace(",", "."))
+    try: p_val = float(preco)
     except: p_val = 0.0
     try: q_val = int(qtd)
     except: q_val = 0
+    
     with engine.begin() as conn:
-        conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, :q) ON CONFLICT (nome) DO UPDATE SET categoria = EXCLUDED.categoria, preco = EXCLUDED.preco"), {"n": nome.strip(), "c": cat, "p": p_val, "q": q_val})
+        conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, :q) ON CONFLICT (nome) DO UPDATE SET categoria = EXCLUDED.categoria, preco = EXCLUDED.preco"), {"n": nome, "c": cat, "p": p_val, "q": q_val})
     return RedirectResponse(url="/estoque", status_code=303)
 
-@app.post("/att_estoque") # BLINDAGEM CONTRA ERRO 422
-async def att_estoque(i: str = Form(""), q: str = Form("0")):
+@app.post("/att_estoque")
+async def att_estoque(request: Request):
+    form = await request.form()
+    i = form.get("i", "")
+    q = form.get("q", "0")
     try: q_val = int(q)
     except: q_val = 0
-    with engine.begin() as conn: conn.execute(text("UPDATE produtos SET estoque = COALESCE(estoque, 0) + :q WHERE nome = :i"), {"i": i, "q": q_val})
+    with engine.begin() as conn: 
+        conn.execute(text("UPDATE produtos SET estoque = COALESCE(estoque, 0) + :q WHERE nome = :i"), {"i": i, "q": q_val})
     return RedirectResponse(url="/estoque", status_code=303)
 
-@app.post("/editar_produto") # BLINDAGEM CONTRA ERRO 422
-async def editar_produto(nome_antigo: str = Form(""), nome_novo: str = Form(""), preco: str = Form("0")):
+@app.post("/editar_produto")
+async def editar_produto(request: Request):
+    form = await request.form()
+    nome_antigo = form.get("nome_antigo", "")
+    nome_novo = form.get("nome_novo", "")
+    preco = form.get("preco", "0").replace(",", ".")
+    
     if not nome_antigo or not nome_novo: return RedirectResponse(url="/estoque", status_code=303)
-    try: p_val = float(preco.replace(",", "."))
+    try: p_val = float(preco)
     except: p_val = 0.0
+    
     with engine.begin() as conn:
         conn.execute(text("UPDATE produtos SET nome = :n_n, preco = :p WHERE nome = :n_a"), {"n_n": nome_novo.strip(), "p": p_val, "n_a": nome_antigo})
     return RedirectResponse(url="/estoque", status_code=303)
 
 @app.post("/excluir_produto")
-async def excluir_produto(nome: str = Form("")):
+async def excluir_produto(request: Request):
+    form = await request.form()
+    nome = form.get("nome", "")
     if nome:
-        with engine.begin() as conn: conn.execute(text("DELETE FROM produtos WHERE nome = :n"), {"n": nome})
+        with engine.begin() as conn: 
+            conn.execute(text("DELETE FROM produtos WHERE nome = :n"), {"n": nome})
     return RedirectResponse(url="/estoque", status_code=303)
 
 @app.get("/vendas", response_class=HTMLResponse)
@@ -284,6 +309,7 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
             <a href='/vendas?cat=CERVEJAS&p={p}' class='btn-menu {"ativo" if cat=="CERVEJAS" else ""}'>🍾 CERVEJAS</a>
             <a href='/vendas?cat=PETISCOS&p={p}' class='btn-menu {"ativo" if cat=="PETISCOS" else ""}'>🍟 PETISCOS</a>
             <a href='/vendas?cat=BEBIDAS&p={p}' class='btn-menu {"ativo" if cat=="BEBIDAS" else ""}'>🍹 BEBIDAS</a>
+            <a href='/vendas?cat=OUTROS&p={p}' class='btn-menu {"ativo" if cat=="OUTROS" else ""}'>📦 OUTROS</a>
         </div>
         <div class='main-area'>
             {IMG_LOGO}
@@ -294,12 +320,17 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
     </div></body></html>"""
 
 @app.post("/lancar_pedido", response_class=HTMLResponse)
-async def lancar_pedido(p: str = Form(""), itens: str = Form("")):
+async def lancar_pedido(request: Request):
+    form = await request.form()
+    p = form.get("p", "")
+    itens = form.get("itens", "")
     if not p or not itens: return "Sem itens"
+    
     lista = json.loads(itens)
     if not lista: return "Sem itens"
     tot = sum(i['v'] for i in lista)
     linhas_cupom = ""
+    
     with engine.begin() as conn:
         chk = conn.execute(text("SELECT id FROM pulseiras WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p}).fetchone()
         if not chk: return HTMLResponse("<script>alert('Comanda não encontrada ou fechada!'); window.close();</script>")
@@ -360,9 +391,13 @@ async def fechar_conta(q: str = ""):
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Fechar Conta</h2><form method='get'><input class='input-padrao' name='q' placeholder='CPF ou Nº Pulseira' value='{q}' required><button class='btn-acao'>CONSULTAR CONTA</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
 
 @app.post("/confirmar_fechamento", response_class=HTMLResponse)
-async def confirmar_fechamento(p: str = Form(""), divisao: str = Form("1")):
+async def confirmar_fechamento(request: Request):
+    form = await request.form()
+    p = form.get("p", "")
+    divisao = form.get("divisao", "1")
     try: div_val = int(divisao)
     except: div_val = 1
+    
     with engine.begin() as conn: 
         c_info = conn.execute(text("SELECT c.nome_completo, p.total_conta FROM pulseiras p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE p.numero_pulseira = :p AND p.status = 'ABERTA'"), {"p": p}).fetchone()
         if not c_info: return HTMLResponse("<script>alert('Comanda já fechada!'); window.location.href='/central';</script>")
@@ -406,8 +441,10 @@ async def tela_busca(q: str = ""):
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Buscar Cliente</h2><form method='get'><input class='input-padrao' name='q' placeholder='Nome ou CPF' value='{q}'><button class='btn-acao'>PESQUISAR</button></form><table>{resultados}</table><br><a href='/central'>Voltar</a></div></div></body></html>"
 
 @app.post("/abrir")
-async def abrir(cpf: str = Form(""), p: str = Form("")):
-    cpf, p = cpf.strip(), p.strip()
+async def abrir(request: Request):
+    form = await request.form()
+    cpf = form.get("cpf", "").strip()
+    p = form.get("p", "").strip()
     with engine.begin() as conn:
         chk_cpf = conn.execute(text("SELECT numero_pulseira FROM pulseiras WHERE cliente_cpf = :c AND status = 'ABERTA'"), {"c": cpf}).fetchone()
         if chk_cpf: return HTMLResponse(f"<script>alert('❌ Cliente já possui a comanda {chk_cpf[0]} aberta!'); window.history.back();</script>")
@@ -421,8 +458,15 @@ async def tela_cadastro():
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Novo Cliente</h2><form action='/salvar' method='post'><input class='input-padrao' name='nome' placeholder='Nome Completo' required><input class='input-padrao' name='cpf' placeholder='CPF' required><input class='input-padrao' name='nasc' type='date' required><input class='input-padrao' name='contato' placeholder='WhatsApp' required><input class='input-padrao' name='email' type='email' placeholder='E-mail (Opcional)'><input class='input-padrao' name='pulseira' placeholder='Nº Pulseira' required><button class='btn-acao' style='background:#d31a21'>SALVAR E ABRIR</button></form><br><a href='/central'>Voltar</a></div></div></body></html>"
 
 @app.post("/salvar")
-async def salvar(nome: str = Form(""), cpf: str = Form(""), nasc: str = Form(""), contato: str = Form(""), email: str = Form(None), pulseira: str = Form("")):
-    cpf, pulseira = cpf.strip(), pulseira.strip()
+async def salvar(request: Request):
+    form = await request.form()
+    nome = form.get("nome", "")
+    cpf = form.get("cpf", "").strip()
+    nasc = form.get("nasc", "")
+    contato = form.get("contato", "")
+    email = form.get("email", None)
+    pulseira = form.get("pulseira", "").strip()
+    
     with engine.begin() as conn:
         conn.execute(text("INSERT INTO clientes (nome_completo, cpf, data_nascimento, contato, email) VALUES (:n, :c, :d, :co, :e) ON CONFLICT (cpf) DO NOTHING"), {"n":nome, "c":cpf, "d":nasc, "co":contato, "e":email})
         chk_cpf = conn.execute(text("SELECT numero_pulseira FROM pulseiras WHERE cliente_cpf = :c AND status = 'ABERTA'"), {"c": cpf}).fetchone()

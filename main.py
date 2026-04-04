@@ -31,14 +31,14 @@ CSS = """
 <style>
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     body { margin: 0; background: #0a3a7a; color: white; height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
-    .top-logo { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 140px; z-index: 100; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }
-    .layout-vendas { display: flex; flex: 1; padding-top: 70px; }
+    .layout-vendas { display: flex; flex: 1; padding-top: 20px; }
     .menu-lateral { width: 220px; padding: 20px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid rgba(255,255,255,0.2); }
     .btn-menu { background: #062b5e; color: white; border: 2px solid #0a3a7a; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 16px; cursor: pointer; text-decoration: none; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: space-between; }
     .btn-menu:hover, .btn-menu.ativo { background: #0d4b9c; border-color: white; }
     .btn-menu span { font-size: 10px; color: #aaa; }
     .main-area { flex: 1; padding: 20px; }
-    .main-area h2 { margin-top: 0; font-size: 28px; text-transform: uppercase; text-shadow: 1px 1px 2px black; }
+    .header-main { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 25px; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; }
+    .header-main h2 { margin: 0; font-size: 32px; text-transform: uppercase; text-shadow: 1px 1px 2px black; letter-spacing: 2px; }
     .grid-produtos { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; }
     .prod-card { background: linear-gradient(180deg, #d31a21 0%, #a11015 100%); border: 2px solid #73070b; border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.4); display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; }
     .prod-card:hover { transform: scale(1.05); border-color: white; }
@@ -54,7 +54,6 @@ CSS = """
     .container-center { display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; }
     .card-center { background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 600px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
     .input-padrao { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
-    .btn-vermelho { background: var(--vermelho); color: white; }
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
 </style>
@@ -124,7 +123,6 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
         }}
     </script>
     </head><body>
-    <img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' class='top-logo'>
     <div class='layout-vendas'>
         <div class='menu-lateral'>
             <a href='/vendas?cat=CHOPP&p={p}' class='btn-menu {"ativo" if cat=="CHOPP" else ""}'>🍺 CHOPP <span>F1</span></a>
@@ -133,7 +131,10 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
             <a href='/vendas?cat=BEBIDAS&p={p}' class='btn-menu {"ativo" if cat=="BEBIDAS" else ""}'>🍹 BEBIDAS <span>F4</span></a>
         </div>
         <div class='main-area'>
-            <h2>{cat}</h2>
+            <div class='header-main'>
+                <img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' width='100'>
+                <h2>{cat}</h2>
+            </div>
             <div class='grid-produtos'>{prods}</div>
         </div>
         <div class='comanda-lateral'>{comanda_display}</div>
@@ -159,9 +160,17 @@ async def fechar_conta(q: str = ""):
             """), {"q": q}).fetchone()
             
             if query:
-                res = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; color:#333; margin-top:20px;'>
-                    <h3>Cliente: {query.nome_completo}</h3>
-                    <h2 style='color:#d31a21'>Total: R$ {query.total_conta:.2f}</h2>
+                itens_q = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p GROUP BY item_nome"), {"p": query.numero_pulseira}).fetchall()
+                lista_itens = "".join([f"<div style='display:flex; justify-content:space-between; border-bottom:1px dashed #ccc; padding:5px 0;'><span>{i.qtd}x {i.item_nome}</span><span>R$ {i.tot:.2f}</span></div>" for i in itens_q])
+                if not lista_itens and query.total_conta > 0: lista_itens = "<div style='display:flex; justify-content:space-between; border-bottom:1px dashed #ccc; padding:5px 0;'><span>1x Couvert</span><span>R$ 7.00</span></div>"
+
+                res = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; color:#333; margin-top:20px; text-align:left;'>
+                    <h3 style='text-align:center; margin-top:0;'>Cliente: {query.nome_completo}</h3>
+                    <div style='background:white; padding:15px; border-radius:8px; margin-bottom:15px; max-height:200px; overflow-y:auto;'>
+                        <h4 style='margin:0 0 10px 0;'>Itens Consumidos:</h4>
+                        {lista_itens}
+                    </div>
+                    <h2 style='color:#d31a21; text-align:center;'>Total: R$ {query.total_conta:.2f}</h2>
                     <form action='/confirmar_fechamento' method='post'>
                         <input type='hidden' name='p' value='{query.numero_pulseira}'>
                         <button class='btn-acao' style='background:#28a745; padding:15px; font-size:18px;'>💰 CONFIRMAR PAGAMENTO</button>

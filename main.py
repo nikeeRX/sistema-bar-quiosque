@@ -2,7 +2,7 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import create_engine, text
 from starlette.middleware.sessions import SessionMiddleware
-from datetime import date
+from datetime import datetime, date
 import json
 
 app = FastAPI()
@@ -26,7 +26,6 @@ with engine.begin() as conn:
         CREATE TABLE IF NOT EXISTS vendas_itens (id SERIAL PRIMARY KEY, pulseira_num TEXT, item_nome TEXT, valor DECIMAL(10,2), data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME);
     """))
 
-# --- ATUALIZAÇÕES DE COLUNA NAS PULSEIRAS E VENDAS ---
 MIGRACOES = [
     "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
     "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
@@ -37,30 +36,22 @@ for mig in MIGRACOES:
         with engine.begin() as conn: conn.execute(text(mig))
     except Exception: pass
 
-# --- O RESET NUCLEAR: GARANTE A TABELA DE PRODUTOS PERFEITA ---
 try:
     with engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS produtos CASCADE;"))
         conn.execute(text("""
             CREATE TABLE produtos (
-                id SERIAL PRIMARY KEY,
-                nome TEXT UNIQUE NOT NULL,
-                categoria TEXT DEFAULT 'OUTROS',
-                preco DECIMAL(10,2) DEFAULT 0.00,
-                estoque INT DEFAULT 0
+                id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL, categoria TEXT DEFAULT 'OUTROS', preco DECIMAL(10,2) DEFAULT 0.00, estoque INT DEFAULT 0
             );
         """))
-except Exception as e:
-    pass
+except Exception: pass
 
-# --- INSERÇÃO DO CARDÁPIO COM ESTOQUE CHEIO (100 UNIDADES) ---
 try:
     with engine.begin() as conn:
         for cat, itens in MENU_INICIAL.items():
             for n, p in itens:
                 conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 100) ON CONFLICT (nome) DO NOTHING"), {"n": n, "c": cat, "p": p})
-except Exception as e:
-    pass
+except Exception: pass
 
 CSS = """
 <style>
@@ -98,13 +89,13 @@ CSS = """
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
     
-    /* LAYOUT EXATO DA IMPRESSORA TÉRMICA */
+    /* LAYOUT TÉRMICO DEFINITIVO (Padrão Bar do Cuscuz) */
     .cupom-bg { background: #555; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px; margin: 0; font-family: 'Courier New', Courier, monospace; color: black; }
-    .cupom { width: 300px; font-size: 12px; font-weight: bold; text-transform: uppercase; background: white; color: black; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-    .cupom-head { text-align: center; margin-bottom: 10px; font-size: 13px; }
-    .cupom-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
-    .cupom-divider { border-top: 1px dashed #000; margin: 8px 0; }
-    .cupom-bold { font-size: 14px; font-weight: 900; }
+    .cupom { width: 300px; font-size: 13px; font-weight: bold; text-transform: uppercase; background: white; color: black; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    .cupom-head { text-align: center; margin-bottom: 5px; font-size: 13px; line-height: 1.2; }
+    .cupom-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+    .cupom-divider { border-top: 1px dashed #000; margin: 6px 0; }
+    .cupom-bold { font-size: 15px; font-weight: 900; }
     .no-print { display: block; width: 300px; margin: 20px auto; text-align: center; background: #d31a21; color: white; padding: 15px; text-decoration: none; border-radius: 5px; font-family: sans-serif; font-size: 16px; font-weight: bold; }
     
     @media print { 
@@ -206,7 +197,6 @@ async def tela_estoque(request: Request):
         function editarProd(nomeAntigo, precoAtual) {{
             let novoNome = prompt("Novo Nome do Produto:", nomeAntigo);
             if (novoNome === null) return;
-            
             let novoPreco = prompt("Novo Preço (ex: 15.90 ou 15,90):", precoAtual);
             if (novoPreco === null) return;
             
@@ -230,7 +220,6 @@ async def novo_produto(request: Request):
         qtd = form.get("qtd", "0")
         
         if not nome: return RedirectResponse(url="/estoque", status_code=303)
-        
         try: p_val = float(preco)
         except: p_val = 0.0
         try: q_val = int(qtd)
@@ -262,16 +251,13 @@ async def editar_produto(request: Request):
         nome_antigo = form.get("nome_antigo", "")
         nome_novo = form.get("nome_novo", "")
         preco = form.get("preco", "0").replace(",", ".")
-        
         if not nome_antigo or not nome_novo: return RedirectResponse(url="/estoque", status_code=303)
         try: p_val = float(preco)
         except: p_val = 0.0
-        
         with engine.begin() as conn:
             conn.execute(text("UPDATE produtos SET nome = :n_n, preco = :p WHERE nome = :n_a"), {"n_n": nome_novo.strip(), "p": p_val, "n_a": nome_antigo})
         return RedirectResponse(url="/estoque", status_code=303)
-    except Exception as e:
-        return HTMLResponse(f"<script>alert('Erro ao editar produto: {e}'); window.history.back();</script>")
+    except Exception as e: return HTMLResponse(f"<script>alert('Erro ao editar produto: {e}'); window.history.back();</script>")
 
 @app.post("/excluir_produto")
 async def excluir_produto(request: Request):
@@ -286,7 +272,6 @@ async def excluir_produto(request: Request):
 
 @app.get("/vendas", response_class=HTMLResponse)
 async def vendas(cat: str = "CHOPP", p: str = ""):
-    # Trava de Segurança: Se tentou abrir com pulseira, vamos checar se ela existe MESMO
     if p:
         with engine.connect() as conn:
             chk = conn.execute(text("SELECT id FROM pulseiras WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p}).fetchone()
@@ -308,7 +293,6 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
             query_itens = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall()
             for r in query_itens: itens_html += f"<div class='item-linha'><span>{r.qtd}x {r.item_nome}</span><span>R$ {float(r.tot or 0):.2f}</span></div>"
 
-    # NOVO LAYOUT DO CABEÇALHO (Campo de digitação numérico com Botão Acessar)
     comanda_display = f"""
         <div class='comanda-header' style='padding-bottom:15px;'>
             <div style='font-size:13px; margin-bottom:8px; color:#ffdddd;'>NÚMERO DA PULSEIRA:</div>
@@ -332,42 +316,29 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
     return f"""<html><head>{CSS}
     <script>
         const p_num = new URLSearchParams(window.location.search).get("p") || "";
-        // Sistema de Memória Fotográfica mantido!
         let cart = JSON.parse(sessionStorage.getItem("cart_" + p_num)) || []; 
         
         function add(n, v, e){{ 
             if(!p_num) return alert("Acesse uma pulseira no campo acima primeiro!"); 
             let count = cart.filter(x => x.n === n).length;
             if (e <= 0 || count >= e) return alert("❌ Produto esgotado ou sem estoque suficiente!");
-            cart.push({{n, v}}); 
-            sessionStorage.setItem("cart_" + p_num, JSON.stringify(cart));
-            render(); 
+            cart.push({{n, v}}); sessionStorage.setItem("cart_" + p_num, JSON.stringify(cart)); render(); 
         }}
         function render(){{
-            let html = ""; let t = 0;
-            if(!p_num) return;
+            let html = ""; let t = 0; if(!p_num) return;
             cart.forEach((i, idx) => {{ 
                 html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black; font-size:16px; margin-left:8px;'>X</b></span></div>`; 
                 t += i.v; 
             }});
-            document.getElementById('novo-pedido').innerHTML = html; 
-            document.getElementById('tot-pedido').innerText = "R$ " + t.toFixed(2);
+            document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = "R$ " + t.toFixed(2);
         }}
-        function rem(idx) {{ 
-            cart.splice(idx, 1); 
-            sessionStorage.setItem("cart_" + p_num, JSON.stringify(cart));
-            render(); 
-        }}
+        function rem(idx) {{ cart.splice(idx, 1); sessionStorage.setItem("cart_" + p_num, JSON.stringify(cart)); render(); }}
         function enviarPedido() {{
             if(!p_num || cart.length === 0) return alert("Adicione itens ao pedido antes de finalizar!");
             let f = document.createElement("form"); f.method = "POST"; f.action = "/lancar_pedido"; f.target = "_blank";
             let i1 = document.createElement("input"); i1.name = "p"; i1.value = p_num; f.appendChild(i1);
             let i2 = document.createElement("input"); i2.name = "itens"; i2.value = JSON.stringify(cart); f.appendChild(i2);
-            document.body.appendChild(f); 
-            
-            // Limpa a memória após enviar com sucesso
-            sessionStorage.removeItem("cart_" + p_num);
-            f.submit(); 
+            document.body.appendChild(f); sessionStorage.removeItem("cart_" + p_num); f.submit(); 
             setTimeout(() => window.location.reload(), 1500);
         }}
         function acessarComanda() {{
@@ -413,17 +384,20 @@ async def lancar_pedido(request: Request):
             for i in lista:
                 conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor, status) VALUES (:p, :n, :v, 'ABERTA')"), {"p": p, "n": i['n'], "v": i['v']})
                 conn.execute(text("UPDATE produtos SET estoque = GREATEST(COALESCE(estoque, 0) - 1, 0) WHERE nome = :n"), {"n": i['n']})
-                linhas_cupom += f"<div class='cupom-row'><span>1x {i['n']}</span><span>{float(i['v']):.2f}</span></div>"
+                
+                # Formatação de linha estilo Bar do Cuscuz
+                nome_formatado = i['n'][:22]
+                linhas_cupom += f"<div>{nome_formatado}<br>{1} x {float(i['v']):.2f} <span style='float:right'>{float(i['v']):.2f}</span></div>"
     except Exception: pass
     
     return f"""<html class='cupom-bg'><body onload='window.print();'><div class='cupom'>
         <div class='cupom-head'><b>QUIOSQUE CHOPP BRAHMA</b><br>TICKET DE PREPARO<br>PULSEIRA: <b>{p}</b></div>
         <div class='cupom-divider'></div>
-        <div class='cupom-row cupom-bold'><span>QTD ITEM</span><span>VALOR</span></div>
+        <div class='cupom-row cupom-bold'><span>Qtd x Vl.Unit</span><span>Vl.Total</span></div>
         <div class='cupom-divider'></div>
         {linhas_cupom}
         <div class='cupom-divider'></div>
-        <div class='cupom-row cupom-bold'><span>TOTAL PEDIDO</span><span>R$ {tot:.2f}</span></div>
+        <div class='cupom-row cupom-bold' style='font-size:16px;'><span>TOTAL PEDIDO</span><span>{tot:.2f}</span></div>
         <div class='cupom-divider'></div>
         <div style='text-align:center; margin-top:10px; font-size:11px;'>VIA DE PREPARO</div>
     </div></body></html>"""
@@ -443,27 +417,64 @@ async def fechar_conta(q: str = ""):
                 subtotal = float(query.total_conta or 0)
                 taxa = subtotal * 0.10
                 total_final = subtotal + taxa
+                
                 res = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; color:#333; margin-top:20px; text-align:left;'>
                     <h3 style='text-align:center; margin-bottom:5px;'>{query.nome_completo}</h3>
                     <p style='text-align:center; margin-top:0; font-weight:bold'>Pulseira: {query.numero_pulseira}</p>
                     <div style='background:white; padding:15px; border-radius:8px; max-height:220px; overflow-y:auto; border:1px solid #ddd;'>{lista}</div>
+                    
                     <div style='padding-top:15px; font-size:16px;'>
                         <div class='item-linha'><span>Subtotal Consumo:</span><span>R$ {subtotal:.2f}</span></div>
                         <div class='item-linha'><span>Taxa Serviço (10%):</span><span>R$ {taxa:.2f}</span></div>
-                        <div class='item-linha' style='font-weight:bold; font-size:20px; color:#d31a21'><span>TOTAL:</span><span>R$ {total_final:.2f}</span></div>
-                        <div class='item-linha' style='margin-top:10px;'><span>Dividir por:</span><input type='number' id='divisores' value='1' min='1' style='width:60px; text-align:center; border:1px solid #ccc; border-radius:3px; font-weight:bold;' oninput='calcDiv()'></div>
-                        <div class='item-linha' style='font-weight:bold; font-size:18px;'><span>Por Pessoa:</span><span id='val_pessoa'>R$ {total_final:.2f}</span></div>
+                        <div class='item-linha' style='color:#062b5e;'>
+                            <span>Desconto (R$):</span>
+                            <input type='number' id='input_desconto' value='0' min='0' step='0.01' style='width:80px; text-align:right; border:1px solid #ccc; border-radius:3px; padding:2px;' oninput='calcDiv()'>
+                        </div>
+                        <div class='item-linha' style='font-weight:bold; font-size:20px; color:#d31a21; margin-top:10px;'>
+                            <span>TOTAL A PAGAR:</span><span id='tot_final'>R$ {total_final:.2f}</span>
+                        </div>
+                        <div class='item-linha' style='margin-top:10px;'>
+                            <span>Dividir por:</span>
+                            <input type='number' id='divisores' value='1' min='1' style='width:60px; text-align:center; border:1px solid #ccc; border-radius:3px; font-weight:bold;' oninput='calcDiv()'>
+                        </div>
+                        <div class='item-linha' style='font-weight:bold; font-size:18px;'>
+                            <span>Por Pessoa:</span><span id='val_pessoa'>R$ {total_final:.2f}</span>
+                        </div>
+                        
+                        <div class='item-linha' style='margin-top:15px; align-items:center;'>
+                            <span style='font-weight:bold;'>Pagamento:</span>
+                            <select id='select_pag' class='input-padrao' style='width:auto; padding:5px; margin:0;' onchange='document.getElementById("input_pag_form").value = this.value'>
+                                <option value='DINHEIRO'>DINHEIRO</option>
+                                <option value='PIX'>PIX</option>
+                                <option value='C. CRÉDITO'>C. CRÉDITO</option>
+                                <option value='C. DÉBITO'>C. DÉBITO</option>
+                            </select>
+                        </div>
                     </div>
+                    
                     <form action='/confirmar_fechamento' method='post' target='_blank' onsubmit='setTimeout(()=>window.location.href="/central", 1500)'>
                         <input type='hidden' name='p' value='{query.numero_pulseira}'>
                         <input type='hidden' name='divisao' id='input_div' value='1'>
+                        <input type='hidden' name='desconto' id='input_desc_form' value='0'>
+                        <input type='hidden' name='pagamento' id='input_pag_form' value='DINHEIRO'>
                         <button class='btn-acao' style='background:#28a745; font-size:18px; margin-top:15px;'>🖨️ CONFIRMAR E IMPRIMIR RECIBO</button>
                     </form>
+                    
                     <script>
                         function calcDiv() {{
+                            let subtotal = {subtotal};
+                            let taxa = {taxa};
+                            let desc = parseFloat(document.getElementById('input_desconto').value) || 0;
                             let div = parseInt(document.getElementById('divisores').value) || 1;
-                            let tot = {total_final}; document.getElementById('val_pessoa').innerText = "R$ " + (tot / div).toFixed(2);
+                            
+                            let totFinal = subtotal + taxa - desc;
+                            if (totFinal < 0) totFinal = 0;
+                            
+                            document.getElementById('tot_final').innerText = "R$ " + totFinal.toFixed(2);
+                            document.getElementById('val_pessoa').innerText = "R$ " + (totFinal / div).toFixed(2);
+                            
                             document.getElementById('input_div').value = div;
+                            document.getElementById('input_desc_form').value = desc;
                         }}
                     </script>
                 </div>"""
@@ -475,8 +486,14 @@ async def confirmar_fechamento(request: Request):
     form = await request.form()
     p = form.get("p", "")
     divisao = form.get("divisao", "1")
+    desconto_str = form.get("desconto", "0")
+    pagamento = form.get("pagamento", "DINHEIRO")
+    
     try: div_val = int(divisao)
     except: div_val = 1
+    
+    try: desc_val = float(desconto_str)
+    except: desc_val = 0.0
     
     try:
         with engine.begin() as conn: 
@@ -487,29 +504,55 @@ async def confirmar_fechamento(request: Request):
             conn.execute(text("UPDATE vendas_itens SET status = 'FECHADA' WHERE pulseira_num = :p AND status = 'ABERTA'"), {"p": p})
 
         linhas_cupom = ""
-        for i in itens_q: linhas_cupom += f"<div class='cupom-row'><span>{i.qtd}x {i.item_nome}</span><span>{float(i.tot or 0):.2f}</span></div>"
-        linhas_cupom += f"<div class='cupom-row'><span>1x Couvert Artístico</span><span>7.00</span></div>"
+        for i in itens_q: 
+            nome_item = i.item_nome[:20]
+            v_unit = float(i.tot) / i.qtd if i.qtd > 0 else 0
+            linhas_cupom += f"<div>{nome_item}<br>{i.qtd} x {v_unit:.2f} <span style='float:right'>{float(i.tot or 0):.2f}</span></div>"
+        
+        # O Couvert que é padrão no BD (sempre é 7 reais)
+        linhas_cupom += f"<div>Couvert Artistico<br>1 x 7.00 <span style='float:right'>7.00</span></div>"
         
         subt = float(c_info.total_conta or 0)
         taxa = subt * 0.10
-        tot = subt + taxa
+        tot = subt + taxa - desc_val
+        if tot < 0: tot = 0
         val_div = tot / div_val
+        
+        data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
 
         return f"""<html class='cupom-bg'><body onload='window.print();'><div class='cupom'>
-            <div class='cupom-head'><b>QUIOSQUE CHOPP BRAHMA</b><br>CONFERENCIA DE MESA<br>NÃO É DOCUMENTO FISCAL<br><br>CLIENTE: {c_info.nome_completo}<br>PULSEIRA: <b>{p}</b></div>
+            <div class='cupom-head'>
+                <b>QUIOSQUE CHOPP BRAHMA</b><br>
+                NOTA DE CONFERENCIA<br>
+                AGUARDE SUA NOTA FISCAL<br>
+                Tel: (61) 99999-9999
+            </div>
             <div class='cupom-divider'></div>
-            <div class='cupom-row cupom-bold'><span>QTD ITEM</span><span>VALOR</span></div>
+            <div>
+                PULSEIRA: {p}<br>
+                CLIENTE: {c_info.nome_completo[:20]}<br>
+                DATA: {data_atual}
+            </div>
+            <div class='cupom-divider'></div>
+            <div class='cupom-bold'>Qtd. x Vl.Unit <span style='float:right'>Vl.Total</span></div>
             <div class='cupom-divider'></div>
             {linhas_cupom}
             <div class='cupom-divider'></div>
-            <div class='cupom-row'><span>SUBTOTAL:</span><span>{subt:.2f}</span></div>
-            <div class='cupom-row'><span>TAXA SERVICO 10%:</span><span>{taxa:.2f}</span></div>
+            <div class='cupom-row'><span>PRODUTOS</span><span>{subt:.2f}</span></div>
+            <div class='cupom-row'><span>SERVICOS 10%</span><span>{taxa:.2f}</span></div>
+            <div class='cupom-row'><span>DESCONTO</span><span>- {desc_val:.2f}</span></div>
             <div class='cupom-divider'></div>
-            <div class='cupom-row cupom-bold'><span>TOTAL A PAGAR:</span><span>R$ {tot:.2f}</span></div>
+            <div class='cupom-row cupom-bold' style='font-size:18px;'><span>TOTAL</span><span>{tot:.2f}</span></div>
             <div class='cupom-divider'></div>
-            <div class='cupom-row' style='margin-top:5px;'><span>DIVIDIDO POR:</span><span>{div_val} PESSOA(S)</span></div>
-            <div class='cupom-row cupom-bold'><span>VALOR POR PESSOA:</span><span>R$ {val_div:.2f}</span></div>
-            <div style='text-align:center; margin-top:15px; font-size:11px;'><br>OBRIGADO E VOLTE SEMPRE!</div>
+            <div class='cupom-row'><span>PAGAMENTO:</span><span>{pagamento}</span></div>
+            <div class='cupom-row'><span>DIVIDIDO POR:</span><span>{div_val} PESSOA(S)</span></div>
+            <div class='cupom-row cupom-bold'><span>VALOR POR PESSOA:</span><span>{val_div:.2f}</span></div>
+            <div class='cupom-divider'></div>
+            <div style='text-align:center; font-size:11px; line-height: 1.2;'>
+                COMANDA DE CIRCULACAO INTERNA<br>
+                NAO TEM VALOR FISCAL<br>
+                OBRIGADO E VOLTE SEMPRE!
+            </div>
         </div>
         <a href='/central' class='no-print'>VOLTAR AO SISTEMA</a>
         </body></html>"""

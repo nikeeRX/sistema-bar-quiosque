@@ -37,7 +37,7 @@ for mig in MIGRACOES:
         with engine.begin() as conn: conn.execute(text(mig))
     except Exception: pass
 
-# --- O RESET NUCLEAR: DELETA A TABELA DE PRODUTOS CORROMPIDA E RECRIAR DO ZERO ---
+# --- O RESET NUCLEAR: GARANTE A TABELA DE PRODUTOS PERFEITA ---
 try:
     with engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS produtos CASCADE;"))
@@ -51,7 +51,7 @@ try:
             );
         """))
 except Exception as e:
-    print(f"Erro ao recriar tabela de produtos: {e}")
+    pass
 
 # --- INSERÇÃO DO CARDÁPIO COM ESTOQUE CHEIO (100 UNIDADES) ---
 try:
@@ -60,7 +60,7 @@ try:
             for n, p in itens:
                 conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 100) ON CONFLICT (nome) DO NOTHING"), {"n": n, "c": cat, "p": p})
 except Exception as e:
-    print(f"Erro ao inserir menu: {e}")
+    pass
 
 CSS = """
 <style>
@@ -72,7 +72,6 @@ CSS = """
     .btn-menu:hover, .btn-menu.ativo { background: #d31a21; border-color: white; }
     .main-area { flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; }
     
-    /* LOGO OFICIAL + RESERVA */
     .logo-central { width: 140px; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }
     .logo-peq { width: 100px; margin-bottom: 10px; }
     .logo-css { background: #d31a21; color: white; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 4px solid white; box-shadow: 0 6px 12px rgba(0,0,0,0.5); font-weight: 900; line-height: 1.1; text-transform: uppercase; font-family: 'Arial Black', sans-serif; }
@@ -114,7 +113,6 @@ CSS = """
 </style>
 """
 
-# Logo Blindada: Tenta a imagem. Se falhar, exibe uma logo CSS desenhada na hora.
 IMG_LOGO = """
 <div style='display:flex; justify-content:center; margin-bottom:20px;'>
     <img src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png' class='logo-central' style='margin:0;' onerror='this.style.display="none"; document.getElementById("fb-logo").style.display="flex";'>
@@ -294,16 +292,29 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
             prods += f"<div class='prod-card {cor}' onclick='add(\"{n}\", {v_val}, {e_val})'><b>{n}</b><span>R$ {v_val:.2f}</span><div class='badge-estoque'>Estoque: {e_val}</div></div>"
     
     itens_html = ""
+    # Busca dinamicamente todas as pulseiras abertas para colocar no menu dropdown
+    opcoes_pulseira = "<option value=''>SELECIONE UMA PULSEIRA</option>"
+    with engine.connect() as conn:
+        pulseiras_abertas = conn.execute(text("SELECT numero_pulseira FROM pulseiras WHERE status = 'ABERTA' ORDER BY numero_pulseira")).fetchall()
+        for r in pulseiras_abertas:
+            sel = "selected" if p == r.numero_pulseira else ""
+            opcoes_pulseira += f"<option value='{r.numero_pulseira}' {sel}>PULSEIRA {r.numero_pulseira}</option>"
+
     if p:
         with engine.connect() as conn:
             query_itens = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall()
             for r in query_itens: itens_html += f"<div class='item-linha'><span>{r.qtd}x {r.item_nome}</span><span>R$ {float(r.tot or 0):.2f}</span></div>"
 
     comanda_display = f"""
-        <div class='comanda-header'>PULSEIRA: {p if p else 'NENHUMA'}</div>
+        <div class='comanda-header' style='padding-bottom:10px;'>
+            <div style='font-size:12px; margin-bottom:5px; color:#ffdddd;'>PULSEIRA ATIVA:</div>
+            <select class='input-padrao' style='margin:0; font-weight:bold; text-align:center; color:black; padding:8px;' onchange='mudarPulseira(this.value)'>
+                {opcoes_pulseira}
+            </select>
+        </div>
         <div class='comanda-body'>
             <div class='secao-titulo'>Histórico de Consumo</div>
-            {itens_html if p else "<div style='color:#999; text-align:center'>Defina a pulseira</div>"}
+            {itens_html if p else "<div style='color:#999; text-align:center'>Nenhuma pulseira selecionada</div>"}
             <br>
             <div class='secao-titulo' style='color:#d31a21'>Novo Pedido</div>
             <div id='novo-pedido'></div>
@@ -311,34 +322,54 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
         <div class='comanda-footer'>
             <div style='display:flex; justify-content:space-between; font-size:18px; font-weight:bold; margin-bottom:10px;'><span>Subtotal Pedido:</span><span id='tot-pedido'>R$ 0.00</span></div>
             <button class='btn-acao' style='background:#28a745; font-size:16px;' onclick='enviarPedido()'>🖨️ FINALIZAR PEDIDO</button>
-            <button class='btn-acao' onclick='setPulseira()'>Trocar Pulseira</button>
             <a href='/central' class='btn-acao' style='background:#333'>Voltar</a>
         </div>
     """
 
     return f"""<html><head>{CSS}
     <script>
-        let cart = []; const p_num = new URLSearchParams(window.location.search).get("p");
+        const p_num = new URLSearchParams(window.location.search).get("p") || "";
+        // Sistema de Memória Fotográfica! Ele salva os itens atrelados a pulseira atual.
+        let cart = JSON.parse(sessionStorage.getItem("cart_" + p_num)) || []; 
+        
         function add(n, v, e){{ 
-            if(!p_num) return alert("Defina a pulseira primeiro!"); 
+            if(!p_num) return alert("Selecione uma pulseira na lista acima primeiro!"); 
             let count = cart.filter(x => x.n === n).length;
             if (e <= 0 || count >= e) return alert("❌ Produto esgotado ou sem estoque suficiente!");
-            cart.push({{n, v}}); render(); 
+            cart.push({{n, v}}); 
+            sessionStorage.setItem("cart_" + p_num, JSON.stringify(cart));
+            render(); 
         }}
         function render(){{
             let html = ""; let t = 0;
-            cart.forEach((i, idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black; font-size:16px; margin-left:8px;'>X</b></span></div>`; t += i.v; }});
-            document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = "R$ " + t.toFixed(2);
+            cart.forEach((i, idx) => {{ 
+                html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black; font-size:16px; margin-left:8px;'>X</b></span></div>`; 
+                t += i.v; 
+            }});
+            document.getElementById('novo-pedido').innerHTML = html; 
+            document.getElementById('tot-pedido').innerText = "R$ " + t.toFixed(2);
         }}
-        function rem(idx) {{ cart.splice(idx, 1); render(); }}
+        function rem(idx) {{ 
+            cart.splice(idx, 1); 
+            sessionStorage.setItem("cart_" + p_num, JSON.stringify(cart));
+            render(); 
+        }}
         function enviarPedido() {{
-            if(!p_num || cart.length === 0) return alert("Adicione itens ao pedido!");
+            if(!p_num || cart.length === 0) return alert("Adicione itens ao pedido antes de finalizar!");
             let f = document.createElement("form"); f.method = "POST"; f.action = "/lancar_pedido"; f.target = "_blank";
             let i1 = document.createElement("input"); i1.name = "p"; i1.value = p_num; f.appendChild(i1);
             let i2 = document.createElement("input"); i2.name = "itens"; i2.value = JSON.stringify(cart); f.appendChild(i2);
-            document.body.appendChild(f); f.submit(); setTimeout(() => window.location.reload(), 1500);
+            document.body.appendChild(f); 
+            
+            // Limpa a memória após enviar com sucesso
+            sessionStorage.removeItem("cart_" + p_num);
+            f.submit(); 
+            setTimeout(() => window.location.reload(), 1500);
         }}
-        function setPulseira() {{ let num = prompt("Número da Pulseira ativa:"); if(num) window.location.href=`/vendas?cat={cat}&p=${{num}}`; }}
+        function mudarPulseira(val) {{ 
+            window.location.href=`/vendas?cat={cat}&p=${{val}}`; 
+        }}
+        window.onload = render;
     </script>
     </head><body><div class='layout-vendas'>
         <div class='menu-lateral'>

@@ -98,17 +98,21 @@ CSS = """
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
     
-    .cupom-bg { background-color: #fdf8c6 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px; margin: 0; font-family: 'Courier New', Courier, monospace; }
-    .cupom { width: 320px; font-size: 13px; font-weight: bold; text-transform: uppercase; background-color: #fdf8c6 !important; color: #000 !important; padding: 20px; border: 1px dashed #000; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
-    .cupom-head { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
-    .cupom-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
-    .cupom-divider { border-top: 2px dashed #000; margin: 10px 0; }
-    .no-print { display: block; width: 320px; margin: 20px auto; text-align: center; background: #d31a21; color: white; padding: 15px; text-decoration: none; border-radius: 5px; font-family: sans-serif; font-size: 16px;}
+    /* LAYOUT EXATO DA IMPRESSORA TÉRMICA */
+    .cupom-bg { background: #555; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px; margin: 0; font-family: 'Courier New', Courier, monospace; color: black; }
+    .cupom { width: 300px; font-size: 12px; font-weight: bold; text-transform: uppercase; background: white; color: black; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    .cupom-head { text-align: center; margin-bottom: 10px; font-size: 13px; }
+    .cupom-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .cupom-divider { border-top: 1px dashed #000; margin: 8px 0; }
+    .cupom-bold { font-size: 14px; font-weight: 900; }
+    .no-print { display: block; width: 300px; margin: 20px auto; text-align: center; background: #d31a21; color: white; padding: 15px; text-decoration: none; border-radius: 5px; font-family: sans-serif; font-size: 16px; font-weight: bold; }
+    
     @media print { 
-        .no-print { display: none !important; } 
         @page { margin: 0; }
-        body, html, .cupom-bg { background-color: #fdf8c6 !important; margin: 0 !important; padding: 0 !important; height: auto; } 
-        .cupom { width: 100% !important; max-width: 100%; border: none !important; box-shadow: none !important; margin: 0 !important; padding: 10px !important; }
+        body, html, .cupom-bg { background: white !important; margin: 0 !important; padding: 0 !important; height: auto; display: block; } 
+        .cupom { width: 100% !important; max-width: 100%; border: none !important; box-shadow: none !important; margin: 0 !important; padding: 0 5px !important; }
+        .no-print { display: none !important; }
+        * { color: black !important; background: transparent !important; }
     }
 </style>
 """
@@ -282,6 +286,13 @@ async def excluir_produto(request: Request):
 
 @app.get("/vendas", response_class=HTMLResponse)
 async def vendas(cat: str = "CHOPP", p: str = ""):
+    # Trava de Segurança: Se tentou abrir com pulseira, vamos checar se ela existe MESMO
+    if p:
+        with engine.connect() as conn:
+            chk = conn.execute(text("SELECT id FROM pulseiras WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p}).fetchone()
+            if not chk:
+                return HTMLResponse(f"<script>alert('A comanda {p} não está ativa ou não existe!'); window.location.href='/vendas?cat={cat}';</script>")
+
     prods = ""
     with engine.connect() as conn:
         lista_prods = conn.execute(text("SELECT nome, preco, estoque FROM produtos WHERE categoria = :c ORDER BY nome"), {"c": cat}).fetchall()
@@ -292,29 +303,21 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
             prods += f"<div class='prod-card {cor}' onclick='add(\"{n}\", {v_val}, {e_val})'><b>{n}</b><span>R$ {v_val:.2f}</span><div class='badge-estoque'>Estoque: {e_val}</div></div>"
     
     itens_html = ""
-    # Busca dinamicamente todas as pulseiras abertas para colocar no menu dropdown
-    opcoes_pulseira = "<option value=''>SELECIONE UMA PULSEIRA</option>"
-    with engine.connect() as conn:
-        pulseiras_abertas = conn.execute(text("SELECT numero_pulseira FROM pulseiras WHERE status = 'ABERTA' ORDER BY numero_pulseira")).fetchall()
-        for r in pulseiras_abertas:
-            sel = "selected" if p == r.numero_pulseira else ""
-            opcoes_pulseira += f"<option value='{r.numero_pulseira}' {sel}>PULSEIRA {r.numero_pulseira}</option>"
-
     if p:
         with engine.connect() as conn:
             query_itens = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall()
             for r in query_itens: itens_html += f"<div class='item-linha'><span>{r.qtd}x {r.item_nome}</span><span>R$ {float(r.tot or 0):.2f}</span></div>"
 
+    # NOVO LAYOUT DO CABEÇALHO (Campo de digitação numérico com Botão Acessar)
     comanda_display = f"""
-        <div class='comanda-header' style='padding-bottom:10px;'>
-            <div style='font-size:12px; margin-bottom:5px; color:#ffdddd;'>PULSEIRA ATIVA:</div>
-            <select class='input-padrao' style='margin:0; font-weight:bold; text-align:center; color:black; padding:8px;' onchange='mudarPulseira(this.value)'>
-                {opcoes_pulseira}
-            </select>
+        <div class='comanda-header' style='padding-bottom:15px;'>
+            <div style='font-size:13px; margin-bottom:8px; color:#ffdddd;'>NÚMERO DA PULSEIRA:</div>
+            <input type='number' id='input-pulseira' class='input-padrao' style='margin:0; font-weight:bold; text-align:center; color:black; padding:10px; font-size:20px;' value='{p}' placeholder='Ex: 15'>
+            <button class='btn-acao' style='background:white; color:#d31a21; margin-top:10px; padding:10px; font-size:15px;' onclick='acessarComanda()'>ACESSAR COMANDA</button>
         </div>
         <div class='comanda-body'>
             <div class='secao-titulo'>Histórico de Consumo</div>
-            {itens_html if p else "<div style='color:#999; text-align:center'>Nenhuma pulseira selecionada</div>"}
+            {itens_html if p else "<div style='color:#999; text-align:center'>Nenhuma pulseira acessada</div>"}
             <br>
             <div class='secao-titulo' style='color:#d31a21'>Novo Pedido</div>
             <div id='novo-pedido'></div>
@@ -329,11 +332,11 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
     return f"""<html><head>{CSS}
     <script>
         const p_num = new URLSearchParams(window.location.search).get("p") || "";
-        // Sistema de Memória Fotográfica! Ele salva os itens atrelados a pulseira atual.
+        // Sistema de Memória Fotográfica mantido!
         let cart = JSON.parse(sessionStorage.getItem("cart_" + p_num)) || []; 
         
         function add(n, v, e){{ 
-            if(!p_num) return alert("Selecione uma pulseira na lista acima primeiro!"); 
+            if(!p_num) return alert("Acesse uma pulseira no campo acima primeiro!"); 
             let count = cart.filter(x => x.n === n).length;
             if (e <= 0 || count >= e) return alert("❌ Produto esgotado ou sem estoque suficiente!");
             cart.push({{n, v}}); 
@@ -342,6 +345,7 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
         }}
         function render(){{
             let html = ""; let t = 0;
+            if(!p_num) return;
             cart.forEach((i, idx) => {{ 
                 html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black; font-size:16px; margin-left:8px;'>X</b></span></div>`; 
                 t += i.v; 
@@ -366,8 +370,10 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
             f.submit(); 
             setTimeout(() => window.location.reload(), 1500);
         }}
-        function mudarPulseira(val) {{ 
-            window.location.href=`/vendas?cat={cat}&p=${{val}}`; 
+        function acessarComanda() {{
+            let val = document.getElementById('input-pulseira').value;
+            if(!val) return alert("Digite o número da pulseira no campo primeiro!");
+            window.location.href=`/vendas?cat={cat}&p=${{val}}`;
         }}
         window.onload = render;
     </script>
@@ -411,11 +417,15 @@ async def lancar_pedido(request: Request):
     except Exception: pass
     
     return f"""<html class='cupom-bg'><body onload='window.print();'><div class='cupom'>
-        <div class='cupom-head'><b>QUIOSQUE CHOPP BRAHMA</b><br>TICKET DE PREPARO<br><br>PULSEIRA: {p}</div>
-        <div class='cupom-row cupom-bold'><span>Qtd Item</span><span>Valor</span></div><div class='cupom-divider'></div>
+        <div class='cupom-head'><b>QUIOSQUE CHOPP BRAHMA</b><br>TICKET DE PREPARO<br>PULSEIRA: <b>{p}</b></div>
+        <div class='cupom-divider'></div>
+        <div class='cupom-row cupom-bold'><span>QTD ITEM</span><span>VALOR</span></div>
+        <div class='cupom-divider'></div>
         {linhas_cupom}
-        <div class='cupom-divider'></div><div class='cupom-row cupom-bold'><span>TOTAL PEDIDO</span><span>R$ {tot:.2f}</span></div>
-        <div style='text-align:center; margin-top:15px;'><br>VIA DE PREPARO</div>
+        <div class='cupom-divider'></div>
+        <div class='cupom-row cupom-bold'><span>TOTAL PEDIDO</span><span>R$ {tot:.2f}</span></div>
+        <div class='cupom-divider'></div>
+        <div style='text-align:center; margin-top:10px; font-size:11px;'>VIA DE PREPARO</div>
     </div></body></html>"""
 
 @app.get("/fechar_conta", response_class=HTMLResponse)
@@ -486,19 +496,23 @@ async def confirmar_fechamento(request: Request):
         val_div = tot / div_val
 
         return f"""<html class='cupom-bg'><body onload='window.print();'><div class='cupom'>
-            <div class='cupom-head'><b>QUIOSQUE CHOPP BRAHMA</b><br>CONFERENCIA DE MESA<br>NÃO É DOCUMENTO FISCAL<br><br>Cliente: {c_info.nome_completo}<br>Pulseira: {p}</div>
-            <div class='cupom-row cupom-bold'><span>Qtd Item</span><span>Valor</span></div><div class='cupom-divider'></div>
+            <div class='cupom-head'><b>QUIOSQUE CHOPP BRAHMA</b><br>CONFERENCIA DE MESA<br>NÃO É DOCUMENTO FISCAL<br><br>CLIENTE: {c_info.nome_completo}<br>PULSEIRA: <b>{p}</b></div>
+            <div class='cupom-divider'></div>
+            <div class='cupom-row cupom-bold'><span>QTD ITEM</span><span>VALOR</span></div>
+            <div class='cupom-divider'></div>
             {linhas_cupom}
             <div class='cupom-divider'></div>
             <div class='cupom-row'><span>SUBTOTAL:</span><span>{subt:.2f}</span></div>
             <div class='cupom-row'><span>TAXA SERVICO 10%:</span><span>{taxa:.2f}</span></div>
             <div class='cupom-divider'></div>
-            <div class='cupom-row cupom-bold'><span>TOTAL A PAGAR:</span><span>{tot:.2f}</span></div>
-            <div class='cupom-row' style='margin-top:10px;'><span>DIVIDIDO POR:</span><span>{div_val} PESSOA(S)</span></div>
-            <div class='cupom-row cupom-bold'><span>VALOR POR PESSOA:</span><span>{val_div:.2f}</span></div>
-            <div style='text-align:center; margin-top:20px;'><br>OBRIGADO E VOLTE SEMPRE!</div>
-            <a href='/central' class='no-print'>VOLTAR AO SISTEMA</a>
-        </div></body></html>"""
+            <div class='cupom-row cupom-bold'><span>TOTAL A PAGAR:</span><span>R$ {tot:.2f}</span></div>
+            <div class='cupom-divider'></div>
+            <div class='cupom-row' style='margin-top:5px;'><span>DIVIDIDO POR:</span><span>{div_val} PESSOA(S)</span></div>
+            <div class='cupom-row cupom-bold'><span>VALOR POR PESSOA:</span><span>R$ {val_div:.2f}</span></div>
+            <div style='text-align:center; margin-top:15px; font-size:11px;'><br>OBRIGADO E VOLTE SEMPRE!</div>
+        </div>
+        <a href='/central' class='no-print'>VOLTAR AO SISTEMA</a>
+        </body></html>"""
     except Exception:
         return RedirectResponse(url="/central", status_code=303)
 

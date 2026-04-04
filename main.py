@@ -18,7 +18,7 @@ MENU_INICIAL = {
     "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
 }
 
-# --- CRIAÇÃO DO BANCO E MIGRAÇÕES SEGURAS ---
+# --- CRIAÇÃO E BLINDAGEM DO BANCO DE DADOS ---
 with engine.begin() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS clientes (
@@ -34,17 +34,15 @@ with engine.begin() as conn:
             data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME
         );
         CREATE TABLE IF NOT EXISTS produtos (
-            id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL
+            id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL,
+            categoria TEXT, preco DECIMAL(10,2) DEFAULT 0.00, estoque INT DEFAULT 0
         );
     """))
 
 MIGRACOES = [
     "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
     "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
-    "ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;",
-    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS categoria TEXT;",
-    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco DECIMAL(10,2);",
-    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque INT DEFAULT 0;"
+    "ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;"
 ]
 
 for mig in MIGRACOES:
@@ -52,13 +50,12 @@ for mig in MIGRACOES:
         with engine.begin() as conn: conn.execute(text(mig))
     except Exception: pass
 
-# --- CORREÇÃO AUTOMÁTICA DE ITENS INVISÍVEIS (SEM CATEGORIA) ---
+# --- RECUPERAR ITENS INVISÍVEIS E INSERIR CARDÁPIO INICIAL ---
 try:
     with engine.begin() as conn:
         for cat, itens in MENU_INICIAL.items():
             for n, p in itens:
-                conn.execute(text("UPDATE produtos SET categoria = :c WHERE nome = :n AND categoria IS NULL"), {"c": cat, "n": n})
-                conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 0) ON CONFLICT (nome) DO NOTHING"), {"n": n, "c": cat, "p": p})
+                conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 0) ON CONFLICT (nome) DO UPDATE SET categoria = COALESCE(produtos.categoria, EXCLUDED.categoria)"), {"n": n, "c": cat, "p": p})
 except Exception: pass
 
 CSS = """
@@ -94,28 +91,29 @@ CSS = """
     th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
     
     .cupom-bg { background-color: #fdf8c6 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px; margin: 0; font-family: 'Courier New', Courier, monospace; }
-    .cupom { width: 300px; font-size: 13px; font-weight: bold; text-transform: uppercase; background-color: #fdf8c6 !important; color: #000 !important; padding: 20px; border: 1px dashed #000; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    .cupom { width: 320px; font-size: 13px; font-weight: bold; text-transform: uppercase; background-color: #fdf8c6 !important; color: #000 !important; padding: 20px; border: 1px dashed #000; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
     .cupom-head { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
     .cupom-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
     .cupom-divider { border-top: 2px dashed #000; margin: 10px 0; }
-    .no-print { display: block; width: 300px; margin: 20px auto; text-align: center; background: #d31a21; color: white; padding: 15px; text-decoration: none; border-radius: 5px; font-family: sans-serif; font-size: 16px;}
+    .no-print { display: block; width: 320px; margin: 20px auto; text-align: center; background: #d31a21; color: white; padding: 15px; text-decoration: none; border-radius: 5px; font-family: sans-serif; font-size: 16px;}
     @media print { 
         .no-print { display: none !important; } 
-        body, .cupom-bg { background-color: #fdf8c6 !important; margin: 0 !important; padding: 0 !important; } 
-        .cupom { width: 100% !important; box-shadow: none !important; border: none !important; }
+        @page { margin: 0; }
+        body, html, .cupom-bg { background-color: #fdf8c6 !important; margin: 0 !important; padding: 0 !important; height: auto; } 
+        .cupom { width: 100% !important; max-width: 100%; border: none !important; box-shadow: none !important; margin: 0 !important; padding: 10px !important; }
     }
 </style>
 """
 
-IMG_LOGO = "<img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' onerror=\"this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png'\" width='140' class='logo-central'>"
-IMG_LOGO_PEQ = "<img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' onerror=\"this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png'\" width='100' style='margin-bottom:10px;'>"
+IMG_LOGO = "<img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' onerror=\"this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png'\" width='140' class='logo-central'>"
+IMG_LOGO_PEQ = "<img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' onerror=\"this.onerror=null; this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png'\" width='100' style='margin-bottom:10px;'>"
 
 @app.get("/", response_class=HTMLResponse)
 async def login_page():
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO}<h2>Acesso Restrito</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form></div></div></body></html>"
 
 @app.post("/login")
-async def login(request: Request, user: str = Form(...), pw: str = Form(...)):
+async def login(request: Request, user: str = Form(""), pw: str = Form("")):
     if (user == "admin" and pw == "1234") or (user == "garcom" and pw == "chopp"):
         request.session["user"] = user
         return RedirectResponse(url="/central", status_code=303)
@@ -149,7 +147,7 @@ async def tela_estoque(request: Request):
                     <button class='btn-acao' style='background:#28a745; margin:0; padding:8px; width:auto;' title='Adicionar Estoque'>➕</button>
                 </form>
                 <button class='btn-acao' style='background:#ffc107; color:black; margin:0; padding:8px; width:auto;' title='Editar' onclick='editarProd("{r.nome}", {p_val})'>✏️</button>
-                <form action='/excluir_produto' method='post' style='margin:0;' onsubmit='return confirm("Deseja realmente EXCLUIR {r.nome}?");'>
+                <form action='/excluir_produto' method='post' style='margin:0;' onsubmit='return confirm("Deseja realmente EXCLUIR o item {r.nome}?");'>
                     <input type='hidden' name='nome' value='{r.nome}'>
                     <button class='btn-acao' style='background:#d31a21; margin:0; padding:8px; width:auto;' title='Excluir'>🗑️</button>
                 </form>
@@ -176,9 +174,9 @@ async def tela_estoque(request: Request):
     <script>
         function editarProd(nomeAntigo, precoAtual) {{
             let novoNome = prompt("Novo Nome do Produto (deixe igual se quiser manter):", nomeAntigo);
-            if (!novoNome) return;
+            if (!novoNome || novoNome.trim() === "") return;
             let novoPreco = prompt("Novo Preço (use ponto ou vírgula):", precoAtual);
-            if (!novoPreco) return;
+            if (!novoPreco || novoPreco.trim() === "") return;
             
             let f = document.createElement("form"); f.method = "POST"; f.action = "/editar_produto";
             let i1 = document.createElement("input"); i1.name = "nome_antigo"; i1.value = nomeAntigo; f.appendChild(i1);
@@ -189,21 +187,27 @@ async def tela_estoque(request: Request):
     </script>
     </head><body><div class='container-center'><div class='card-center'><h2>Gestão de Estoque</h2>{add_form}<div style='max-height:400px; overflow-y:auto; border:1px solid #ddd;'><table><tr><th style='color:black'>Item</th><th style='color:black'>Qtd</th><th style='color:black'>Ação</th></tr>{linhas}</table></div><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"""
 
-@app.post("/novo_produto")
-async def novo_produto(nome: str = Form(...), cat: str = Form(...), preco: str = Form(...), qtd: int = Form(...)):
+@app.post("/novo_produto") # BLINDAGEM CONTRA ERRO 422
+async def novo_produto(nome: str = Form(""), cat: str = Form("OUTROS"), preco: str = Form("0"), qtd: str = Form("0")):
+    if not nome: return RedirectResponse(url="/estoque", status_code=303)
     try: p_val = float(preco.replace(",", "."))
     except: p_val = 0.0
+    try: q_val = int(qtd)
+    except: q_val = 0
     with engine.begin() as conn:
-        conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, :q) ON CONFLICT (nome) DO UPDATE SET categoria = EXCLUDED.categoria, preco = EXCLUDED.preco"), {"n": nome.strip(), "c": cat, "p": p_val, "q": qtd})
+        conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, :q) ON CONFLICT (nome) DO UPDATE SET categoria = EXCLUDED.categoria, preco = EXCLUDED.preco"), {"n": nome.strip(), "c": cat, "p": p_val, "q": q_val})
     return RedirectResponse(url="/estoque", status_code=303)
 
-@app.post("/att_estoque")
-async def att_estoque(i: str = Form(...), q: int = Form(...)):
-    with engine.begin() as conn: conn.execute(text("UPDATE produtos SET estoque = COALESCE(estoque, 0) + :q WHERE nome = :i"), {"i": i, "q": q})
+@app.post("/att_estoque") # BLINDAGEM CONTRA ERRO 422
+async def att_estoque(i: str = Form(""), q: str = Form("0")):
+    try: q_val = int(q)
+    except: q_val = 0
+    with engine.begin() as conn: conn.execute(text("UPDATE produtos SET estoque = COALESCE(estoque, 0) + :q WHERE nome = :i"), {"i": i, "q": q_val})
     return RedirectResponse(url="/estoque", status_code=303)
 
-@app.post("/editar_produto")
-async def editar_produto(nome_antigo: str = Form(...), nome_novo: str = Form(...), preco: str = Form(...)):
+@app.post("/editar_produto") # BLINDAGEM CONTRA ERRO 422
+async def editar_produto(nome_antigo: str = Form(""), nome_novo: str = Form(""), preco: str = Form("0")):
+    if not nome_antigo or not nome_novo: return RedirectResponse(url="/estoque", status_code=303)
     try: p_val = float(preco.replace(",", "."))
     except: p_val = 0.0
     with engine.begin() as conn:
@@ -211,9 +215,9 @@ async def editar_produto(nome_antigo: str = Form(...), nome_novo: str = Form(...
     return RedirectResponse(url="/estoque", status_code=303)
 
 @app.post("/excluir_produto")
-async def excluir_produto(nome: str = Form(...)):
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM produtos WHERE nome = :n"), {"n": nome})
+async def excluir_produto(nome: str = Form("")):
+    if nome:
+        with engine.begin() as conn: conn.execute(text("DELETE FROM produtos WHERE nome = :n"), {"n": nome})
     return RedirectResponse(url="/estoque", status_code=303)
 
 @app.get("/vendas", response_class=HTMLResponse)
@@ -290,7 +294,8 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
     </div></body></html>"""
 
 @app.post("/lancar_pedido", response_class=HTMLResponse)
-async def lancar_pedido(p: str = Form(...), itens: str = Form(...)):
+async def lancar_pedido(p: str = Form(""), itens: str = Form("")):
+    if not p or not itens: return "Sem itens"
     lista = json.loads(itens)
     if not lista: return "Sem itens"
     tot = sum(i['v'] for i in lista)
@@ -355,7 +360,9 @@ async def fechar_conta(q: str = ""):
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Fechar Conta</h2><form method='get'><input class='input-padrao' name='q' placeholder='CPF ou Nº Pulseira' value='{q}' required><button class='btn-acao'>CONSULTAR CONTA</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
 
 @app.post("/confirmar_fechamento", response_class=HTMLResponse)
-async def confirmar_fechamento(p: str = Form(...), divisao: int = Form(1)):
+async def confirmar_fechamento(p: str = Form(""), divisao: str = Form("1")):
+    try: div_val = int(divisao)
+    except: div_val = 1
     with engine.begin() as conn: 
         c_info = conn.execute(text("SELECT c.nome_completo, p.total_conta FROM pulseiras p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE p.numero_pulseira = :p AND p.status = 'ABERTA'"), {"p": p}).fetchone()
         if not c_info: return HTMLResponse("<script>alert('Comanda já fechada!'); window.location.href='/central';</script>")
@@ -370,7 +377,7 @@ async def confirmar_fechamento(p: str = Form(...), divisao: int = Form(1)):
     subt = float(c_info.total_conta or 0)
     taxa = subt * 0.10
     tot = subt + taxa
-    val_div = tot / divisao
+    val_div = tot / div_val
 
     return f"""<html class='cupom-bg'><body onload='window.print();'><div class='cupom'>
         <div class='cupom-head'><b>QUIOSQUE CHOPP BRAHMA</b><br>CONFERENCIA DE MESA<br>NÃO É DOCUMENTO FISCAL<br><br>Cliente: {c_info.nome_completo}<br>Pulseira: {p}</div>
@@ -381,7 +388,7 @@ async def confirmar_fechamento(p: str = Form(...), divisao: int = Form(1)):
         <div class='cupom-row'><span>TAXA SERVICO 10%:</span><span>{taxa:.2f}</span></div>
         <div class='cupom-divider'></div>
         <div class='cupom-row cupom-bold'><span>TOTAL A PAGAR:</span><span>{tot:.2f}</span></div>
-        <div class='cupom-row' style='margin-top:10px;'><span>DIVIDIDO POR:</span><span>{divisao} PESSOA(S)</span></div>
+        <div class='cupom-row' style='margin-top:10px;'><span>DIVIDIDO POR:</span><span>{div_val} PESSOA(S)</span></div>
         <div class='cupom-row cupom-bold'><span>VALOR POR PESSOA:</span><span>{val_div:.2f}</span></div>
         <div style='text-align:center; margin-top:20px;'><br>OBRIGADO E VOLTE SEMPRE!</div>
         <a href='/central' class='no-print'>VOLTAR AO SISTEMA</a>
@@ -399,7 +406,7 @@ async def tela_busca(q: str = ""):
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Buscar Cliente</h2><form method='get'><input class='input-padrao' name='q' placeholder='Nome ou CPF' value='{q}'><button class='btn-acao'>PESQUISAR</button></form><table>{resultados}</table><br><a href='/central'>Voltar</a></div></div></body></html>"
 
 @app.post("/abrir")
-async def abrir(cpf: str = Form(...), p: str = Form(...)):
+async def abrir(cpf: str = Form(""), p: str = Form("")):
     cpf, p = cpf.strip(), p.strip()
     with engine.begin() as conn:
         chk_cpf = conn.execute(text("SELECT numero_pulseira FROM pulseiras WHERE cliente_cpf = :c AND status = 'ABERTA'"), {"c": cpf}).fetchone()
@@ -414,7 +421,7 @@ async def tela_cadastro():
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Novo Cliente</h2><form action='/salvar' method='post'><input class='input-padrao' name='nome' placeholder='Nome Completo' required><input class='input-padrao' name='cpf' placeholder='CPF' required><input class='input-padrao' name='nasc' type='date' required><input class='input-padrao' name='contato' placeholder='WhatsApp' required><input class='input-padrao' name='email' type='email' placeholder='E-mail (Opcional)'><input class='input-padrao' name='pulseira' placeholder='Nº Pulseira' required><button class='btn-acao' style='background:#d31a21'>SALVAR E ABRIR</button></form><br><a href='/central'>Voltar</a></div></div></body></html>"
 
 @app.post("/salvar")
-async def salvar(nome: str = Form(...), cpf: str = Form(...), nasc: str = Form(...), contato: str = Form(...), email: str = Form(None), pulseira: str = Form(...)):
+async def salvar(nome: str = Form(""), cpf: str = Form(""), nasc: str = Form(""), contato: str = Form(""), email: str = Form(None), pulseira: str = Form("")):
     cpf, pulseira = cpf.strip(), pulseira.strip()
     with engine.begin() as conn:
         conn.execute(text("INSERT INTO clientes (nome_completo, cpf, data_nascimento, contato, email) VALUES (:n, :c, :d, :co, :e) ON CONFLICT (cpf) DO NOTHING"), {"n":nome, "c":cpf, "d":nasc, "co":contato, "e":email})

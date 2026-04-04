@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import create_engine, text
 from starlette.middleware.sessions import SessionMiddleware
 from datetime import date
+import json
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="brahma_riacho_mall_2024")
@@ -29,30 +30,29 @@ with engine.begin() as conn:
 
 CSS = """
 <style>
-    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    body { margin: 0; background: #0a3a7a; color: white; height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
-    .layout-vendas { display: flex; flex: 1; padding-top: 20px; }
-    .menu-lateral { width: 220px; padding: 20px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid rgba(255,255,255,0.2); }
-    .btn-menu { background: #062b5e; color: white; border: 2px solid #0a3a7a; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 16px; cursor: pointer; text-decoration: none; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: space-between; }
-    .btn-menu:hover, .btn-menu.ativo { background: #0d4b9c; border-color: white; }
-    .btn-menu span { font-size: 10px; color: #aaa; }
-    .main-area { flex: 1; padding: 20px; }
-    .header-main { display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 25px; background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; }
-    .header-main h2 { margin: 0; font-size: 32px; text-transform: uppercase; text-shadow: 1px 1px 2px black; letter-spacing: 2px; }
-    .grid-produtos { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; }
-    .prod-card { background: linear-gradient(180deg, #d31a21 0%, #a11015 100%); border: 2px solid #73070b; border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.4); display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; }
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+    body { margin: 0; background: #0a3a7a; color: white; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    .layout-vendas { display: flex; flex: 1; height: 100vh; }
+    .menu-lateral { width: 220px; padding: 20px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid rgba(255,255,255,0.1); background: #082d5e; }
+    .btn-menu { background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 16px; cursor: pointer; text-decoration: none; display: flex; justify-content: space-between; }
+    .btn-menu:hover, .btn-menu.ativo { background: #d31a21; border-color: white; }
+    .main-area { flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; }
+    .logo-central { width: 180px; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }
+    .grid-produtos { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; width: 100%; max-width: 900px; }
+    .prod-card { background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border: 2px solid #5a0407; border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 110px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
     .prod-card:hover { transform: scale(1.05); border-color: white; }
-    .prod-card b { font-size: 14px; margin-bottom: 8px; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
-    .prod-card span { font-size: 18px; font-weight: bold; background: rgba(0,0,0,0.2); padding: 5px; border-radius: 5px; }
-    .comanda-lateral { width: 320px; background: white; color: black; margin: 20px; border-radius: 10px; padding: 15px; display: flex; flex-direction: column; box-shadow: 0 8px 15px rgba(0,0,0,0.5); }
-    .comanda-header { display: flex; justify-content: space-between; background: #0a3a7a; color: white; padding: 10px; border-radius: 5px; font-weight: bold; margin-bottom: 10px; }
-    .comanda-items { flex: 1; overflow-y: auto; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-    .item-linha { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; border-bottom: 1px dashed #ccc; padding-bottom: 4px; }
-    .comanda-total { display: flex; justify-content: space-between; font-size: 20px; font-weight: bold; margin-bottom: 15px; }
-    .btn-acao { display: block; width: 100%; padding: 12px; margin-bottom: 8px; border: none; border-radius: 5px; font-weight: bold; color: white; cursor: pointer; text-align: center; text-decoration: none; font-size: 14px; background: #062b5e; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+    .prod-card b { font-size: 14px; margin-bottom: 8px; }
+    .prod-card span { font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.2); padding: 5px; border-radius: 5px; }
+    .comanda-lateral { width: 340px; background: white; color: black; border-left: 5px solid #d31a21; display: flex; flex-direction: column; }
+    .comanda-header { background: #d31a21; color: white; padding: 15px; font-weight: bold; text-align: center; font-size: 18px; }
+    .comanda-body { flex: 1; overflow-y: auto; padding: 15px; background: #f9f9f9; }
+    .secao-titulo { font-size: 12px; color: #666; text-transform: uppercase; font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 10px; padding-bottom: 5px; }
+    .item-linha { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; border-bottom: 1px dashed #ddd; padding-bottom: 5px; }
+    .comanda-footer { padding: 15px; background: white; border-top: 1px solid #ccc; }
+    .btn-acao { display: block; width: 100%; padding: 15px; margin-bottom: 8px; border: none; border-radius: 5px; font-weight: bold; color: white; cursor: pointer; text-align: center; text-decoration: none; font-size: 14px; background: #062b5e; }
     .btn-acao:hover { background: #0d4b9c; }
     .container-center { display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; }
-    .card-center { background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 600px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+    .card-center { background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 500px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
     .input-padrao { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
@@ -68,7 +68,7 @@ MENU = {
 
 @app.get("/", response_class=HTMLResponse)
 async def login_page():
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' width='120'><h2>Acesso ao PDV</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><img src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png' width='140'><h2>Acesso Restrito</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form></div></div></body></html>"
 
 @app.post("/login")
 async def login(request: Request, user: str = Form(...), pw: str = Form(...)):
@@ -80,106 +80,123 @@ async def login(request: Request, user: str = Form(...), pw: str = Form(...)):
 @app.get("/central", response_class=HTMLResponse)
 async def central(request: Request):
     if "user" not in request.session: return RedirectResponse(url="/")
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><h3>Bem-vindo</h3><a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a><a href='/vendas' class='btn-acao' style='background:#0d4b9c'>🛒 MÓDULO DE VENDAS</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a><br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><img src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png' width='100'><br><br><a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a><a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / VENDAS</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a><br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"
 
 @app.get("/vendas", response_class=HTMLResponse)
 async def vendas(cat: str = "CHOPP", p: str = ""):
-    prods = "".join([f"<div class='prod-card' onclick='lancar(\"{n}\", {v})'><b>{n}</b><span>R$ {v:.2f}</span></div>" for n, v in MENU.get(cat, [])])
+    prods = "".join([f"<div class='prod-card' onclick='add(\"{n}\", {v})'><b>{n}</b><span>R$ {v:.2f}</span></div>" for n, v in MENU.get(cat, [])])
     
     itens_html = ""
     total = 0.0
     if p:
         with engine.connect() as conn:
             query_itens = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p GROUP BY item_nome"), {"p": p}).fetchall()
-            for r in query_itens:
-                itens_html += f"<div class='item-linha'><span>{r.qtd}x {r.item_nome}</span><span>R$ {r.tot:.2f}</span></div>"
+            for r in query_itens: itens_html += f"<div class='item-linha'><span>{r.qtd}x {r.item_nome}</span><span>R$ {r.tot:.2f}</span></div>"
             query_tot = conn.execute(text("SELECT total_conta FROM pulseiras WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p}).fetchone()
             total = query_tot.total_conta if query_tot else 0.0
             if total > 0 and not query_itens: itens_html = "<div class='item-linha'><span>1x Couvert</span><span>R$ 7.00</span></div>"
 
     comanda_display = f"""
-        <div class='comanda-header'><span>Comanda Atual</span><span>F5</span></div>
-        <div style='text-align:center; margin-bottom:10px;'><b>Pulseira: {p if p else 'Nenhuma'}</b></div>
-        <div class='comanda-items'>
-            <div style='display:flex; justify-content:space-between; font-weight:bold; border-bottom:2px solid #333; margin-bottom:5px;'><span>Item</span><span>Preço</span></div>
-            {itens_html if p else "<div style='text-align:center; padding:20px; color:#999'>Informe a pulseira</div>"}
+        <div class='comanda-header'>PULSEIRA: {p if p else 'NENHUMA'}</div>
+        <div class='comanda-body'>
+            <div class='secao-titulo'>Já Lançados</div>
+            {itens_html if p else "<div style='color:#999; text-align:center'>Defina a pulseira</div>"}
+            <br>
+            <div class='secao-titulo' style='color:#d31a21'>Novo Pedido</div>
+            <div id='novo-pedido'></div>
         </div>
-        <div class='comanda-total'><span>Total</span><span>R$ {total:.2f}</span></div>
-        <button class='btn-acao' onclick='setPulseira()'>Definir Pulseira (F4)</button>
-        <a href='/fechar_conta?q={p}' class='btn-acao' style='background:#d31a21'>Finalizar Comanda (F10)</a>
-        <a href='/central' class='btn-acao'>Menu Principal (F1)</a>
+        <div class='comanda-footer'>
+            <div style='display:flex; justify-content:space-between; font-size:18px; font-weight:bold; margin-bottom:10px;'><span>A Pagar:</span><span id='tot-pedido'>R$ 0.00</span></div>
+            <button class='btn-acao' style='background:#28a745; font-size:16px;' onclick='enviarPedido()'>🖨️ FINALIZAR PEDIDO</button>
+            <button class='btn-acao' onclick='setPulseira()'>Definir Pulseira</button>
+            <a href='/central' class='btn-acao' style='background:#333'>Voltar</a>
+        </div>
     """
 
     return f"""<html><head>{CSS}
     <script>
-        function lancar(n, v){{
-            const p = new URLSearchParams(window.location.search).get("p");
-            if(!p) {{ alert("Defina a pulseira primeiro!"); return; }}
-            window.location.href=`/lancar?p=${{p}}&v=${{v}}&i=${{n}}&c={cat}`;
+        let cart = [];
+        const p_num = new URLSearchParams(window.location.search).get("p");
+        function add(n, v){{
+            if(!p_num) return alert("Defina a pulseira primeiro!");
+            cart.push({{n, v}}); render();
+        }}
+        function render(){{
+            let html = ""; let t = 0;
+            cart.forEach((i, idx) => {{
+                html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b style='cursor:pointer; color:black;' onclick='rem(${{idx}})'>X</b></span></div>`;
+                t += i.v;
+            }});
+            document.getElementById('novo-pedido').innerHTML = html;
+            document.getElementById('tot-pedido').innerText = "R$ " + t.toFixed(2);
+        }}
+        function rem(idx) {{ cart.splice(idx, 1); render(); }}
+        async function enviarPedido() {{
+            if(!p_num) return;
+            if(cart.length === 0) return alert("Adicione itens!");
+            let fd = new FormData();
+            fd.append("p", p_num);
+            fd.append("itens", JSON.stringify(cart));
+            await fetch("/lancar_pedido", {{method: "POST", body: fd}});
+            alert("Pedido enviado para a impressora!");
+            window.location.reload();
         }}
         function setPulseira() {{
-            let num = prompt("Digite o número da Pulseira ativa:");
+            let num = prompt("Número da Pulseira:");
             if(num) window.location.href=`/vendas?cat={cat}&p=${{num}}`;
         }}
     </script>
     </head><body>
     <div class='layout-vendas'>
         <div class='menu-lateral'>
-            <a href='/vendas?cat=CHOPP&p={p}' class='btn-menu {"ativo" if cat=="CHOPP" else ""}'>🍺 CHOPP <span>F1</span></a>
-            <a href='/vendas?cat=CERVEJAS&p={p}' class='btn-menu {"ativo" if cat=="CERVEJAS" else ""}'>🍾 CERVEJAS <span>F2</span></a>
-            <a href='/vendas?cat=PETISCOS&p={p}' class='btn-menu {"ativo" if cat=="PETISCOS" else ""}'>🍟 PETISCOS <span>F3</span></a>
-            <a href='/vendas?cat=BEBIDAS&p={p}' class='btn-menu {"ativo" if cat=="BEBIDAS" else ""}'>🍹 BEBIDAS <span>F4</span></a>
+            <a href='/vendas?cat=CHOPP&p={p}' class='btn-menu {"ativo" if cat=="CHOPP" else ""}'>🍺 CHOPP</a>
+            <a href='/vendas?cat=CERVEJAS&p={p}' class='btn-menu {"ativo" if cat=="CERVEJAS" else ""}'>🍾 CERVEJAS</a>
+            <a href='/vendas?cat=PETISCOS&p={p}' class='btn-menu {"ativo" if cat=="PETISCOS" else ""}'>🍟 PETISCOS</a>
+            <a href='/vendas?cat=BEBIDAS&p={p}' class='btn-menu {"ativo" if cat=="BEBIDAS" else ""}'>🍹 BEBIDAS</a>
         </div>
         <div class='main-area'>
-            <div class='header-main'>
-                <img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' width='100'>
-                <h2>{cat}</h2>
-            </div>
+            <img src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png' class='logo-central'>
+            <h2 style='margin-bottom:20px; font-size:24px;'>CARDÁPIO - {cat}</h2>
             <div class='grid-produtos'>{prods}</div>
         </div>
         <div class='comanda-lateral'>{comanda_display}</div>
     </div></body></html>"""
 
-@app.get("/lancar")
-async def lancar(p: str, v: float, i: str, c: str):
+@app.post("/lancar_pedido")
+async def lancar_pedido(p: str = Form(...), itens: str = Form(...)):
+    lista = json.loads(itens)
+    tot = sum(i['v'] for i in lista)
     with engine.begin() as conn:
-        conn.execute(text("UPDATE pulseiras SET total_conta = total_conta + :v WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"v": v, "p": p})
-        conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor) VALUES (:p, :i, :v)"), {"p": p, "i": i, "v": v})
-    return RedirectResponse(url=f"/vendas?cat={c}&p={p}", status_code=303)
+        conn.execute(text("UPDATE pulseiras SET total_conta = total_conta + :t WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"t": tot, "p": p})
+        for i in lista:
+            conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor) VALUES (:p, :n, :v)"), {"p": p, "n": i['n'], "v": i['v']})
+    return "ok"
 
 @app.get("/fechar_conta", response_class=HTMLResponse)
 async def fechar_conta(q: str = ""):
     res = ""
     if q:
         with engine.connect() as conn:
-            query = conn.execute(text("""
-                SELECT p.numero_pulseira, p.total_conta, c.nome_completo 
-                FROM pulseiras p 
-                JOIN clientes c ON p.cliente_cpf = c.cpf 
-                WHERE (p.numero_pulseira = :q OR c.cpf = :q) AND p.status = 'ABERTA'
-            """), {"q": q}).fetchone()
-            
+            query = conn.execute(text("SELECT p.numero_pulseira, p.total_conta, c.nome_completo FROM pulseiras p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE (p.numero_pulseira = :q OR c.cpf = :q) AND p.status = 'ABERTA'"), {"q": q}).fetchone()
             if query:
                 itens_q = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p GROUP BY item_nome"), {"p": query.numero_pulseira}).fetchall()
-                lista_itens = "".join([f"<div style='display:flex; justify-content:space-between; border-bottom:1px dashed #ccc; padding:5px 0;'><span>{i.qtd}x {i.item_nome}</span><span>R$ {i.tot:.2f}</span></div>" for i in itens_q])
-                if not lista_itens and query.total_conta > 0: lista_itens = "<div style='display:flex; justify-content:space-between; border-bottom:1px dashed #ccc; padding:5px 0;'><span>1x Couvert</span><span>R$ 7.00</span></div>"
+                lista = "".join([f"<div style='display:flex; justify-content:space-between; border-bottom:1px dashed #ccc; padding:5px 0;'><span>{i.qtd}x {i.item_nome}</span><span>R$ {i.tot:.2f}</span></div>" for i in itens_q])
+                if not lista and query.total_conta > 0: lista = "<div style='display:flex; justify-content:space-between; border-bottom:1px dashed #ccc; padding:5px 0;'><span>1x Couvert</span><span>R$ 7.00</span></div>"
 
-                res = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; color:#333; margin-top:20px; text-align:left;'>
-                    <h3 style='text-align:center; margin-top:0;'>Cliente: {query.nome_completo}</h3>
-                    <div style='background:white; padding:15px; border-radius:8px; margin-bottom:15px; max-height:200px; overflow-y:auto;'>
-                        <h4 style='margin:0 0 10px 0;'>Itens Consumidos:</h4>
-                        {lista_itens}
-                    </div>
-                    <h2 style='color:#d31a21; text-align:center;'>Total: R$ {query.total_conta:.2f}</h2>
+                res = f"""<div style='background:#f9f9f9; padding:20px; border-radius:10px; color:#333; margin-top:20px; text-align:left; border:1px solid #ccc;'>
+                    <h3 style='text-align:center; margin-top:0;'>{query.nome_completo}</h3>
+                    <p style='text-align:center; font-weight:bold; margin-top:0'>Pulseira: {query.numero_pulseira}</p>
+                    <div style='background:white; padding:15px; border-radius:8px; margin-bottom:15px; border:1px solid #ddd;'>{lista}</div>
+                    <h2 style='color:#d31a21; text-align:center;'>Total A Pagar: R$ {query.total_conta:.2f}</h2>
                     <form action='/confirmar_fechamento' method='post'>
                         <input type='hidden' name='p' value='{query.numero_pulseira}'>
                         <button class='btn-acao' style='background:#28a745; padding:15px; font-size:18px;'>💰 CONFIRMAR PAGAMENTO</button>
                     </form>
                 </div>"""
             else:
-                res = "<p style='color:red; margin-top:20px;'>Nenhuma comanda aberta encontrada para esta busca.</p>"
+                res = "<p style='color:red; margin-top:20px;'>Nenhuma comanda aberta localizada.</p>"
 
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><h2>Fechar Conta</h2><form method='get'><input class='input-padrao' name='q' placeholder='CPF ou Nº da Pulseira' value='{q}' required><button class='btn-acao'>BUSCAR</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><h2>Fechar Conta</h2><form method='get'><input class='input-padrao' name='q' placeholder='CPF ou Nº da Pulseira' value='{q}' required><button class='btn-acao'>BUSCAR DADOS</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
 
 @app.post("/confirmar_fechamento")
 async def confirmar_fechamento(p: str = Form(...)):
@@ -197,7 +214,7 @@ async def tela_busca(q: str = ""):
             for r in query:
                 is_bday = r.data_nascimento.strftime("%m-%d") == hoje if r.data_nascimento else False
                 resultados += f"<tr><td style='color:black'>{r.nome_completo}{' 🎁' if is_bday else ''}</td><td><form action='/abrir' method='post' style='display:flex;gap:5px'><input type='hidden' name='cpf' value='{r.cpf}'><input class='input-padrao' name='p' placeholder='Nº Pulseira' required style='width:100px;margin:0'><button class='btn-acao' style='background:#d31a21;margin:0;padding:8px'>ABRIR</button></form></td></tr>"
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><h2>Buscar Cliente</h2><form method='get'><input class='input-padrao' name='q' placeholder='Nome ou CPF...' value='{q}'><button class='btn-acao'>BUSCAR</button></form><table><tr><th style='color:black'>Nome</th><th style='color:black'>Ação</th></tr>{resultados}</table><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><h2>Buscar Cliente</h2><form method='get'><input class='input-padrao' name='q' placeholder='Nome ou CPF...' value='{q}'><button class='btn-acao'>PESQUISAR</button></form><table><tr><th style='color:black'>Nome</th><th style='color:black'>Ação</th></tr>{resultados}</table><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
 
 @app.post("/abrir")
 async def abrir(cpf: str = Form(...), p: str = Form(...)):

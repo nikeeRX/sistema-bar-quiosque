@@ -18,6 +18,7 @@ MENU_INICIAL = {
     "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
 }
 
+# --- CRIAÇÃO DO BANCO E MIGRAÇÕES SEGURAS ---
 with engine.begin() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS clientes (
@@ -51,11 +52,13 @@ for mig in MIGRACOES:
         with engine.begin() as conn: conn.execute(text(mig))
     except Exception: pass
 
+# --- CORREÇÃO AUTOMÁTICA DE ITENS INVISÍVEIS (SEM CATEGORIA) ---
 try:
     with engine.begin() as conn:
         for cat, itens in MENU_INICIAL.items():
             for n, p in itens:
-                conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 0) ON CONFLICT (nome) DO UPDATE SET categoria = EXCLUDED.categoria, preco = EXCLUDED.preco"), {"n": n, "c": cat, "p": p})
+                conn.execute(text("UPDATE produtos SET categoria = :c WHERE nome = :n AND categoria IS NULL"), {"c": cat, "n": n})
+                conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 0) ON CONFLICT (nome) DO NOTHING"), {"n": n, "c": cat, "p": p})
 except Exception: pass
 
 CSS = """
@@ -85,10 +88,10 @@ CSS = """
     .btn-acao { display: block; width: 100%; padding: 15px; margin-bottom: 8px; border: none; border-radius: 5px; font-weight: bold; color: white; cursor: pointer; text-align: center; text-decoration: none; font-size: 14px; background: #062b5e; }
     .btn-acao:hover { background: #0d4b9c; }
     .container-center { display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; overflow-y: auto; }
-    .card-center { background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 600px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); margin: auto; }
+    .card-center { background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 650px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); margin: auto; }
     .input-padrao { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-    th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
+    th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
     
     .cupom-bg { background-color: #fdf8c6 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px; margin: 0; font-family: 'Courier New', Courier, monospace; }
     .cupom { width: 300px; font-size: 13px; font-weight: bold; text-transform: uppercase; background-color: #fdf8c6 !important; color: #000 !important; padding: 20px; border: 1px dashed #000; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
@@ -135,9 +138,24 @@ async def tela_estoque(request: Request):
             p_val = float(r.preco or 0)
             e_val = int(r.estoque or 0)
             if cat_val != curr_cat:
-                linhas += f"<tr><td colspan='3' style='background:#082d5e; color:white; font-weight:bold;'>{cat_val}</td></tr>"
+                linhas += f"<tr><td colspan='3' style='background:#082d5e; color:white; font-weight:bold; text-align:center;'>{cat_val}</td></tr>"
                 curr_cat = cat_val
-            linhas += f"<tr><td style='color:black'>{r.nome} <br><small>R$ {p_val:.2f}</small></td><td style='color:black; font-weight:bold; font-size:18px;'>{e_val}</td><td><form action='/att_estoque' method='post' style='display:flex;gap:5px;margin:0'><input type='hidden' name='i' value='{r.nome}'><input type='number' name='q' class='input-padrao' style='width:70px;margin:0;padding:5px' required><button class='btn-acao' style='background:#28a745;margin:0;padding:8px'>ADD</button></form></td></tr>"
+            
+            acoes = f"""
+            <div style='display:flex; gap:5px; align-items:center;'>
+                <form action='/att_estoque' method='post' style='margin:0; display:flex; gap:5px;'>
+                    <input type='hidden' name='i' value='{r.nome}'>
+                    <input type='number' name='q' class='input-padrao' style='width:50px; margin:0; padding:5px;' required>
+                    <button class='btn-acao' style='background:#28a745; margin:0; padding:8px; width:auto;' title='Adicionar Estoque'>➕</button>
+                </form>
+                <button class='btn-acao' style='background:#ffc107; color:black; margin:0; padding:8px; width:auto;' title='Editar' onclick='editarProd("{r.nome}", {p_val})'>✏️</button>
+                <form action='/excluir_produto' method='post' style='margin:0;' onsubmit='return confirm("Deseja realmente EXCLUIR {r.nome}?");'>
+                    <input type='hidden' name='nome' value='{r.nome}'>
+                    <button class='btn-acao' style='background:#d31a21; margin:0; padding:8px; width:auto;' title='Excluir'>🗑️</button>
+                </form>
+            </div>
+            """
+            linhas += f"<tr><td style='color:black; line-height:1.2;'>{r.nome} <br><small style='color:#666;'>R$ {p_val:.2f}</small></td><td style='color:black; font-weight:bold; font-size:18px;'>{e_val}</td><td>{acoes}</td></tr>"
     
     add_form = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; margin-bottom:20px; text-align:left; border:1px solid #ccc;'>
         <h3 style='margin-top:0; color:#d31a21;'>➕ CADASTRAR NOVO PRODUTO</h3>
@@ -146,24 +164,56 @@ async def tela_estoque(request: Request):
             <select name='cat' class='input-padrao' style='flex:1; min-width:130px;' required>
                 <option value='CHOPP'>CHOPP</option><option value='CERVEJAS'>CERVEJAS</option>
                 <option value='PETISCOS'>PETISCOS</option><option value='BEBIDAS'>BEBIDAS</option>
+                <option value='OUTROS'>OUTROS</option>
             </select>
-            <input name='preco' type='number' step='0.01' placeholder='Preço' class='input-padrao' style='flex:1; min-width:100px;' required>
+            <input name='preco' type='text' placeholder='Preço (Ex: 15,90)' class='input-padrao' style='flex:1; min-width:100px;' required>
             <input name='qtd' type='number' placeholder='Estoque Inicial' class='input-padrao' style='flex:1; min-width:120px;' required>
             <button class='btn-acao' style='background:#062b5e; margin:0; width:100%;'>SALVAR PRODUTO</button>
         </form>
     </div>"""
 
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><h2>Gestão de Estoque</h2>{add_form}<div style='max-height:400px; overflow-y:auto;'><table><tr><th style='color:black'>Item</th><th style='color:black'>Qtd</th><th style='color:black'>Ação</th></tr>{linhas}</table></div><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
+    return f"""<html><head>{CSS}
+    <script>
+        function editarProd(nomeAntigo, precoAtual) {{
+            let novoNome = prompt("Novo Nome do Produto (deixe igual se quiser manter):", nomeAntigo);
+            if (!novoNome) return;
+            let novoPreco = prompt("Novo Preço (use ponto ou vírgula):", precoAtual);
+            if (!novoPreco) return;
+            
+            let f = document.createElement("form"); f.method = "POST"; f.action = "/editar_produto";
+            let i1 = document.createElement("input"); i1.name = "nome_antigo"; i1.value = nomeAntigo; f.appendChild(i1);
+            let i2 = document.createElement("input"); i2.name = "nome_novo"; i2.value = novoNome; f.appendChild(i2);
+            let i3 = document.createElement("input"); i3.name = "preco"; i3.value = novoPreco; f.appendChild(i3);
+            document.body.appendChild(f); f.submit();
+        }}
+    </script>
+    </head><body><div class='container-center'><div class='card-center'><h2>Gestão de Estoque</h2>{add_form}<div style='max-height:400px; overflow-y:auto; border:1px solid #ddd;'><table><tr><th style='color:black'>Item</th><th style='color:black'>Qtd</th><th style='color:black'>Ação</th></tr>{linhas}</table></div><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"""
 
 @app.post("/novo_produto")
-async def novo_produto(nome: str = Form(...), cat: str = Form(...), preco: float = Form(...), qtd: int = Form(...)):
+async def novo_produto(nome: str = Form(...), cat: str = Form(...), preco: str = Form(...), qtd: int = Form(...)):
+    try: p_val = float(preco.replace(",", "."))
+    except: p_val = 0.0
     with engine.begin() as conn:
-        conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, :q) ON CONFLICT (nome) DO UPDATE SET categoria = EXCLUDED.categoria, preco = EXCLUDED.preco"), {"n": nome.strip(), "c": cat, "p": preco, "q": qtd})
+        conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, :q) ON CONFLICT (nome) DO UPDATE SET categoria = EXCLUDED.categoria, preco = EXCLUDED.preco"), {"n": nome.strip(), "c": cat, "p": p_val, "q": qtd})
     return RedirectResponse(url="/estoque", status_code=303)
 
 @app.post("/att_estoque")
 async def att_estoque(i: str = Form(...), q: int = Form(...)):
     with engine.begin() as conn: conn.execute(text("UPDATE produtos SET estoque = COALESCE(estoque, 0) + :q WHERE nome = :i"), {"i": i, "q": q})
+    return RedirectResponse(url="/estoque", status_code=303)
+
+@app.post("/editar_produto")
+async def editar_produto(nome_antigo: str = Form(...), nome_novo: str = Form(...), preco: str = Form(...)):
+    try: p_val = float(preco.replace(",", "."))
+    except: p_val = 0.0
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE produtos SET nome = :n_n, preco = :p WHERE nome = :n_a"), {"n_n": nome_novo.strip(), "p": p_val, "n_a": nome_antigo})
+    return RedirectResponse(url="/estoque", status_code=303)
+
+@app.post("/excluir_produto")
+async def excluir_produto(nome: str = Form(...)):
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM produtos WHERE nome = :n"), {"n": nome})
     return RedirectResponse(url="/estoque", status_code=303)
 
 @app.get("/vendas", response_class=HTMLResponse)

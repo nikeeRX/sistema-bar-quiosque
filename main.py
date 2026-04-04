@@ -18,44 +18,43 @@ MENU_INICIAL = {
     "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
 }
 
-# --- CRIAÇÃO E BLINDAGEM DO BANCO DE DADOS ---
+# --- CRIAÇÃO DO BANCO ---
 with engine.begin() as conn:
     conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS clientes (
-            id SERIAL PRIMARY KEY, nome_completo TEXT NOT NULL, cpf TEXT UNIQUE NOT NULL,
-            data_nascimento DATE, contato TEXT, email TEXT
-        );
-        CREATE TABLE IF NOT EXISTS pulseiras (
-            id SERIAL PRIMARY KEY, numero_pulseira TEXT NOT NULL, cliente_cpf TEXT REFERENCES clientes(cpf),
-            total_conta DECIMAL(10,2) DEFAULT 7.00
-        );
-        CREATE TABLE IF NOT EXISTS vendas_itens (
-            id SERIAL PRIMARY KEY, pulseira_num TEXT, item_nome TEXT, valor DECIMAL(10,2),
-            data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME
-        );
-        CREATE TABLE IF NOT EXISTS produtos (
-            id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL
-        );
+        CREATE TABLE IF NOT EXISTS clientes (id SERIAL PRIMARY KEY, nome_completo TEXT NOT NULL, cpf TEXT UNIQUE NOT NULL, data_nascimento DATE, contato TEXT, email TEXT);
+        CREATE TABLE IF NOT EXISTS pulseiras (id SERIAL PRIMARY KEY, numero_pulseira TEXT NOT NULL, cliente_cpf TEXT REFERENCES clientes(cpf), total_conta DECIMAL(10,2) DEFAULT 7.00);
+        CREATE TABLE IF NOT EXISTS vendas_itens (id SERIAL PRIMARY KEY, pulseira_num TEXT, item_nome TEXT, valor DECIMAL(10,2), data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME);
+        CREATE TABLE IF NOT EXISTS produtos (id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL);
     """))
 
-# Correções na tabela e recuperação de itens "perdidos"
+# --- BLINDAGEM DE COLUNAS ---
+MIGRACOES = [
+    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
+    "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
+    "ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;",
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'OUTROS';",
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco DECIMAL(10,2) DEFAULT 0.00;",
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque INT DEFAULT 0;"
+]
+for mig in MIGRACOES:
+    try:
+        with engine.begin() as conn: conn.execute(text(mig))
+    except Exception: pass
+
+# --- RECUPERAÇÃO DO CARDÁPIO E ESTOQUE FORÇADO ---
 try:
     with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';"))
-        conn.execute(text("ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';"))
-        conn.execute(text("ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;"))
-        conn.execute(text("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'OUTROS';"))
-        conn.execute(text("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco DECIMAL(10,2) DEFAULT 0.00;"))
-        conn.execute(text("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque INT DEFAULT 0;"))
-        # Recupera itens invisíveis que não tinham categoria
-        conn.execute(text("UPDATE produtos SET categoria = 'OUTROS' WHERE categoria IS NULL OR categoria = '';"))
-        
-        # Insere o cardápio base se faltar algo
         for cat, itens in MENU_INICIAL.items():
             for n, p in itens:
-                conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 0) ON CONFLICT (nome) DO NOTHING"), {"n": n, "c": cat, "p": p})
+                # Se não existir, ele cria. Se existir, ele corrige a categoria, o preço e bota 100 de estoque!
+                conn.execute(text("""
+                    INSERT INTO produtos (nome, categoria, preco, estoque) 
+                    VALUES (:n, :c, :p, 100) 
+                    ON CONFLICT (nome) DO UPDATE 
+                    SET categoria = :c, preco = :p, estoque = GREATEST(produtos.estoque, 100)
+                """), {"n": n, "c": cat, "p": p})
 except Exception as e:
-    print(f"Aviso BD: {e}")
+    print(f"Aviso de banco de dados: {e}")
 
 CSS = """
 <style>
@@ -104,8 +103,9 @@ CSS = """
 </style>
 """
 
-IMG_LOGO = "<img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' alt='Brahma' width='140' class='logo-central'>"
-IMG_LOGO_PEQ = "<img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' alt='Brahma' width='100' style='margin-bottom:10px;'>"
+# Link inquebrável da Wikipedia para a Logo
+IMG_LOGO = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png' alt='Brahma' width='140' class='logo-central'>"
+IMG_LOGO_PEQ = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png' alt='Brahma' width='100' style='margin-bottom:10px;'>"
 
 @app.get("/", response_class=HTMLResponse)
 async def login_page():
@@ -166,7 +166,7 @@ async def tela_estoque(request: Request):
                 <option value='PETISCOS'>PETISCOS</option><option value='BEBIDAS'>BEBIDAS</option>
                 <option value='OUTROS'>OUTROS</option>
             </select>
-            <input name='preco' type='text' placeholder='Preço (Ex: 15,90)' class='input-padrao' style='flex:1; min-width:100px;' required>
+            <input name='preco' type='text' placeholder='Preço (Ex: 15.90)' class='input-padrao' style='flex:1; min-width:100px;' required>
             <input name='qtd' type='number' placeholder='Estoque Inicial' class='input-padrao' style='flex:1; min-width:120px;' required>
             <button class='btn-acao' style='background:#062b5e; margin:0; width:100%;'>SALVAR PRODUTO</button>
         </form>
@@ -176,13 +176,12 @@ async def tela_estoque(request: Request):
     <script>
         function editarProd(nomeAntigo, precoAtual) {{
             let novoNome = prompt("Novo Nome do Produto:", nomeAntigo);
-            if (novoNome === null) return; // Se o usuário cancelar, para aqui.
+            if (novoNome === null) return;
             
             let novoPreco = prompt("Novo Preço (ex: 15.90 ou 15,90):", precoAtual);
-            if (novoPreco === null) return; // Se o usuário cancelar, para aqui.
+            if (novoPreco === null) return;
             
             let f = document.createElement("form"); f.method = "POST"; f.action = "/editar_produto";
-            
             let i1 = document.createElement("input"); i1.name = "nome_antigo"; i1.value = nomeAntigo; f.appendChild(i1);
             let i2 = document.createElement("input"); i2.name = "nome_novo"; i2.value = novoNome || nomeAntigo; f.appendChild(i2);
             let i3 = document.createElement("input"); i3.name = "preco"; i3.value = novoPreco || precoAtual; f.appendChild(i3);
@@ -194,56 +193,69 @@ async def tela_estoque(request: Request):
 
 @app.post("/novo_produto")
 async def novo_produto(request: Request):
-    form = await request.form()
-    nome = form.get("nome", "").strip()
-    cat = form.get("cat", "OUTROS")
-    preco = form.get("preco", "0").replace(",", ".")
-    qtd = form.get("qtd", "0")
-    
-    if not nome: return RedirectResponse(url="/estoque", status_code=303)
-    try: p_val = float(preco)
-    except: p_val = 0.0
-    try: q_val = int(qtd)
-    except: q_val = 0
-    
-    with engine.begin() as conn:
-        conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, :q) ON CONFLICT (nome) DO UPDATE SET categoria = EXCLUDED.categoria, preco = EXCLUDED.preco"), {"n": nome, "c": cat, "p": p_val, "q": q_val})
-    return RedirectResponse(url="/estoque", status_code=303)
+    try:
+        form = await request.form()
+        nome = form.get("nome", "").strip()
+        cat = form.get("cat", "OUTROS")
+        preco = form.get("preco", "0").replace(",", ".")
+        qtd = form.get("qtd", "0")
+        
+        if not nome: return RedirectResponse(url="/estoque", status_code=303)
+        
+        try: p_val = float(preco)
+        except: p_val = 0.0
+        try: q_val = int(qtd)
+        except: q_val = 0
+        
+        with engine.begin() as conn:
+            conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, :q) ON CONFLICT (nome) DO UPDATE SET categoria = EXCLUDED.categoria, preco = EXCLUDED.preco"), {"n": nome, "c": cat, "p": p_val, "q": q_val})
+        return RedirectResponse(url="/estoque", status_code=303)
+    except Exception as e:
+        return HTMLResponse(f"<script>alert('Aviso do Sistema: Não foi possível salvar. Erro: {e}'); window.history.back();</script>")
 
 @app.post("/att_estoque")
 async def att_estoque(request: Request):
-    form = await request.form()
-    i = form.get("i", "")
-    q = form.get("q", "0")
-    try: q_val = int(q)
-    except: q_val = 0
-    with engine.begin() as conn: 
-        conn.execute(text("UPDATE produtos SET estoque = COALESCE(estoque, 0) + :q WHERE nome = :i"), {"i": i, "q": q_val})
-    return RedirectResponse(url="/estoque", status_code=303)
+    try:
+        form = await request.form()
+        i = form.get("i", "")
+        q = form.get("q", "0")
+        try: q_val = int(q)
+        except: q_val = 0
+        with engine.begin() as conn: 
+            conn.execute(text("UPDATE produtos SET estoque = COALESCE(estoque, 0) + :q WHERE nome = :i"), {"i": i, "q": q_val})
+        return RedirectResponse(url="/estoque", status_code=303)
+    except Exception as e:
+        return HTMLResponse(f"<script>alert('Aviso do Sistema: Erro ao atualizar estoque: {e}'); window.history.back();</script>")
 
 @app.post("/editar_produto")
 async def editar_produto(request: Request):
-    form = await request.form()
-    nome_antigo = form.get("nome_antigo", "")
-    nome_novo = form.get("nome_novo", "")
-    preco = form.get("preco", "0").replace(",", ".")
-    
-    if not nome_antigo or not nome_novo: return RedirectResponse(url="/estoque", status_code=303)
-    try: p_val = float(preco)
-    except: p_val = 0.0
-    
-    with engine.begin() as conn:
-        conn.execute(text("UPDATE produtos SET nome = :n_n, preco = :p WHERE nome = :n_a"), {"n_n": nome_novo.strip(), "p": p_val, "n_a": nome_antigo})
-    return RedirectResponse(url="/estoque", status_code=303)
+    try:
+        form = await request.form()
+        nome_antigo = form.get("nome_antigo", "")
+        nome_novo = form.get("nome_novo", "")
+        preco = form.get("preco", "0").replace(",", ".")
+        
+        if not nome_antigo or not nome_novo: return RedirectResponse(url="/estoque", status_code=303)
+        try: p_val = float(preco)
+        except: p_val = 0.0
+        
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE produtos SET nome = :n_n, preco = :p WHERE nome = :n_a"), {"n_n": nome_novo.strip(), "p": p_val, "n_a": nome_antigo})
+        return RedirectResponse(url="/estoque", status_code=303)
+    except Exception as e:
+        return HTMLResponse(f"<script>alert('Aviso do Sistema: Erro ao editar produto: {e}'); window.history.back();</script>")
 
 @app.post("/excluir_produto")
 async def excluir_produto(request: Request):
-    form = await request.form()
-    nome = form.get("nome", "")
-    if nome:
-        with engine.begin() as conn: 
-            conn.execute(text("DELETE FROM produtos WHERE nome = :n"), {"n": nome})
-    return RedirectResponse(url="/estoque", status_code=303)
+    try:
+        form = await request.form()
+        nome = form.get("nome", "")
+        if nome:
+            with engine.begin() as conn: 
+                conn.execute(text("DELETE FROM produtos WHERE nome = :n"), {"n": nome})
+        return RedirectResponse(url="/estoque", status_code=303)
+    except Exception as e:
+        return HTMLResponse(f"<script>alert('Aviso do Sistema: Erro ao excluir: {e}'); window.history.back();</script>")
 
 @app.get("/vendas", response_class=HTMLResponse)
 async def vendas(cat: str = "CHOPP", p: str = ""):

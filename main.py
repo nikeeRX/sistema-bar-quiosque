@@ -18,6 +18,7 @@ MENU_INICIAL = {
     "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
 }
 
+# --- BLINDAGEM DO BANCO DE DADOS ---
 with engine.begin() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS clientes (
@@ -26,21 +27,40 @@ with engine.begin() as conn:
         );
         CREATE TABLE IF NOT EXISTS pulseiras (
             id SERIAL PRIMARY KEY, numero_pulseira TEXT NOT NULL, cliente_cpf TEXT REFERENCES clientes(cpf),
-            total_conta DECIMAL(10,2) DEFAULT 7.00, status TEXT DEFAULT 'ABERTA'
+            total_conta DECIMAL(10,2) DEFAULT 7.00
         );
         CREATE TABLE IF NOT EXISTS vendas_itens (
             id SERIAL PRIMARY KEY, pulseira_num TEXT, item_nome TEXT, valor DECIMAL(10,2),
-            data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME, status TEXT DEFAULT 'ABERTA'
+            data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME
         );
         CREATE TABLE IF NOT EXISTS produtos (
-            id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL, categoria TEXT, preco DECIMAL(10,2), estoque INT DEFAULT 0
+            id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL
         );
     """))
-    qtd_prods = conn.execute(text("SELECT COUNT(*) FROM produtos")).scalar()
-    if qtd_prods == 0:
-        for cat, itens in MENU_INICIAL.items():
-            for n, p in itens:
-                conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 0) ON CONFLICT DO NOTHING"), {"n": n, "c": cat, "p": p})
+
+MIGRACOES = [
+    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
+    "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
+    "ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;",
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS categoria TEXT;",
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco DECIMAL(10,2);",
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque INT DEFAULT 0;"
+]
+
+for mig in MIGRACOES:
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(mig))
+    except Exception: pass
+
+try:
+    with engine.begin() as conn:
+        qtd_prods = conn.execute(text("SELECT COUNT(*) FROM produtos")).scalar()
+        if qtd_prods == 0:
+            for cat, itens in MENU_INICIAL.items():
+                for n, p in itens:
+                    conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 0) ON CONFLICT (nome) DO NOTHING"), {"n": n, "c": cat, "p": p})
+except Exception: pass
 
 CSS = """
 <style>
@@ -51,7 +71,7 @@ CSS = """
     .btn-menu { background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 16px; cursor: pointer; text-decoration: none; display: flex; justify-content: space-between; }
     .btn-menu:hover, .btn-menu.ativo { background: #d31a21; border-color: white; }
     .main-area { flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; }
-    .logo-central { width: 160px; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }
+    .logo-central { width: 140px; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }
     .grid-produtos { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; width: 100%; max-width: 900px; }
     .prod-card { border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s; color: white; }
     .prod-card:hover { transform: scale(1.05); border-color: white; border-width: 2px; border-style: solid; }
@@ -74,19 +94,26 @@ CSS = """
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
     
-    .cupom-bg { background: #fdf8c6; color: #000; font-family: 'Courier New', Courier, monospace; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px; margin: 0; }
-    .cupom { width: 320px; font-size: 14px; font-weight: bold; text-transform: uppercase; }
-    .cupom-head { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+    .cupom-bg { background: #e0e0e0; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px; margin: 0; font-family: 'Courier New', Courier, monospace; }
+    .cupom { width: 320px; font-size: 13px; font-weight: bold; text-transform: uppercase; background: #fffae6; padding: 20px; border: 1px dashed #ccc; box-shadow: 0 4px 10px rgba(0,0,0,0.2); color: #000; }
+    .cupom-head { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
     .cupom-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
-    .cupom-divider { border-top: 1px dashed #000; margin: 10px 0; }
-    .no-print { display: block; width: 320px; margin: 20px auto; text-align: center; background: #d31a21; color: white; padding: 15px; text-decoration: none; border-radius: 5px; }
-    @media print { .no-print { display: none !important; } body { background: white; } }
+    .cupom-divider { border-top: 2px dashed #000; margin: 10px 0; }
+    .no-print { display: block; width: 320px; margin: 20px auto; text-align: center; background: #d31a21; color: white; padding: 15px; text-decoration: none; border-radius: 5px; font-family: sans-serif; font-size: 16px;}
+    @media print { 
+        .no-print { display: none !important; } 
+        body, .cupom-bg { background: white !important; margin: 0 !important; padding: 0 !important; } 
+        .cupom { width: 100% !important; box-shadow: none !important; border: none !important; background: white !important; }
+    }
 </style>
 """
 
+IMG_LOGO = "<img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' onerror=\"this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png'\" width='140' class='logo-central'>"
+IMG_LOGO_PEQ = "<img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' onerror=\"this.src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png'\" width='100' style='margin-bottom:10px;'>"
+
 @app.get("/", response_class=HTMLResponse)
 async def login_page():
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' width='140'><h2>Acesso Restrito</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO}<h2>Acesso Restrito</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form></div></div></body></html>"
 
 @app.post("/login")
 async def login(request: Request, user: str = Form(...), pw: str = Form(...)):
@@ -98,7 +125,7 @@ async def login(request: Request, user: str = Form(...), pw: str = Form(...)):
 @app.get("/central", response_class=HTMLResponse)
 async def central(request: Request):
     if "user" not in request.session: return RedirectResponse(url="/")
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' width='120'><br><br><a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a><a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / VENDAS</a><a href='/estoque' class='btn-acao' style='background:#e67e22'>📦 GESTÃO DE ESTOQUE</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a><br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<br><a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a><a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / VENDAS</a><a href='/estoque' class='btn-acao' style='background:#e67e22'>📦 GESTÃO DE ESTOQUE</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a><br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"
 
 @app.get("/estoque", response_class=HTMLResponse)
 async def tela_estoque(request: Request):
@@ -112,7 +139,8 @@ async def tela_estoque(request: Request):
         if r.categoria != curr_cat:
             linhas += f"<tr><td colspan='3' style='background:#082d5e; color:white; font-weight:bold;'>{r.categoria}</td></tr>"
             curr_cat = r.categoria
-        linhas += f"<tr><td style='color:black'>{r.nome} <br><small>R$ {float(r.preco):.2f}</small></td><td style='color:black; font-weight:bold; font-size:18px;'>{r.estoque}</td><td><form action='/att_estoque' method='post' style='display:flex;gap:5px;margin:0'><input type='hidden' name='i' value='{r.nome}'><input type='number' name='q' class='input-padrao' style='width:70px;margin:0;padding:5px' required><button class='btn-acao' style='background:#28a745;margin:0;padding:8px'>ADD</button></form></td></tr>"
+        e_val = int(r.estoque) if r.estoque is not None else 0
+        linhas += f"<tr><td style='color:black'>{r.nome} <br><small>R$ {float(r.preco):.2f}</small></td><td style='color:black; font-weight:bold; font-size:18px;'>{e_val}</td><td><form action='/att_estoque' method='post' style='display:flex;gap:5px;margin:0'><input type='hidden' name='i' value='{r.nome}'><input type='number' name='q' class='input-padrao' style='width:70px;margin:0;padding:5px' required><button class='btn-acao' style='background:#28a745;margin:0;padding:8px'>ADD</button></form></td></tr>"
     
     add_form = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; margin-bottom:20px; text-align:left; border:1px solid #ccc;'>
         <h3 style='margin-top:0; color:#d31a21;'>➕ CADASTRAR NOVO PRODUTO</h3>
@@ -122,7 +150,7 @@ async def tela_estoque(request: Request):
                 <option value='CHOPP'>CHOPP</option><option value='CERVEJAS'>CERVEJAS</option>
                 <option value='PETISCOS'>PETISCOS</option><option value='BEBIDAS'>BEBIDAS</option>
             </select>
-            <input name='preco' type='number' step='0.01' placeholder='Preço (Ex: 15.90)' class='input-padrao' style='flex:1; min-width:120px;' required>
+            <input name='preco' type='number' step='0.01' placeholder='Preço' class='input-padrao' style='flex:1; min-width:100px;' required>
             <input name='qtd' type='number' placeholder='Estoque Inicial' class='input-padrao' style='flex:1; min-width:120px;' required>
             <button class='btn-acao' style='background:#062b5e; margin:0; width:100%;'>SALVAR PRODUTO</button>
         </form>
@@ -138,7 +166,7 @@ async def novo_produto(nome: str = Form(...), cat: str = Form(...), preco: float
 
 @app.post("/att_estoque")
 async def att_estoque(i: str = Form(...), q: int = Form(...)):
-    with engine.begin() as conn: conn.execute(text("UPDATE produtos SET estoque = estoque + :q WHERE nome = :i"), {"i": i, "q": q})
+    with engine.begin() as conn: conn.execute(text("UPDATE produtos SET estoque = COALESCE(estoque, 0) + :q WHERE nome = :i"), {"i": i, "q": q})
     return RedirectResponse(url="/estoque", status_code=303)
 
 @app.get("/vendas", response_class=HTMLResponse)
@@ -147,8 +175,9 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
     with engine.connect() as conn:
         lista_prods = conn.execute(text("SELECT nome, preco, estoque FROM produtos WHERE categoria = :c ORDER BY nome"), {"c": cat}).fetchall()
         for n, v, e in lista_prods:
-            cor = "bg-green" if e > 0 else "bg-red"
-            prods += f"<div class='prod-card {cor}' onclick='add(\"{n}\", {v}, {e})'><b>{n}</b><span>R$ {float(v):.2f}</span><div class='badge-estoque'>Estoque: {e}</div></div>"
+            e_val = int(e) if e is not None else 0
+            cor = "bg-green" if e_val > 0 else "bg-red"
+            prods += f"<div class='prod-card {cor}' onclick='add(\"{n}\", {v}, {e_val})'><b>{n}</b><span>R$ {float(v):.2f}</span><div class='badge-estoque'>Estoque: {e_val}</div></div>"
     
     itens_html = ""
     if p:
@@ -179,7 +208,7 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
         function add(n, v, e){{ 
             if(!p_num) return alert("Defina a pulseira primeiro!"); 
             let count = cart.filter(x => x.n === n).length;
-            if (count >= e) return alert("❌ Produto esgotado ou sem estoque suficiente!");
+            if (e <= 0 || count >= e) return alert("❌ Produto esgotado ou sem estoque suficiente!");
             cart.push({{n, v}}); render(); 
         }}
         function render(){{
@@ -205,7 +234,7 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
             <a href='/vendas?cat=BEBIDAS&p={p}' class='btn-menu {"ativo" if cat=="BEBIDAS" else ""}'>🍹 BEBIDAS</a>
         </div>
         <div class='main-area'>
-            <img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' class='logo-central'>
+            {IMG_LOGO}
             <h2 style='margin-bottom:20px; font-size:24px;'>CARDÁPIO - {cat}</h2>
             <div class='grid-produtos'>{prods}</div>
         </div>
@@ -215,13 +244,16 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
 @app.post("/lancar_pedido", response_class=HTMLResponse)
 async def lancar_pedido(p: str = Form(...), itens: str = Form(...)):
     lista = json.loads(itens)
+    if not lista: return "Sem itens"
     tot = sum(i['v'] for i in lista)
     linhas_cupom = ""
     with engine.begin() as conn:
+        chk = conn.execute(text("SELECT id FROM pulseiras WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p}).fetchone()
+        if not chk: return HTMLResponse("<script>alert('Comanda não encontrada ou fechada!'); window.close();</script>")
         conn.execute(text("UPDATE pulseiras SET total_conta = total_conta + :t WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"t": tot, "p": p})
         for i in lista:
             conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor, status) VALUES (:p, :n, :v, 'ABERTA')"), {"p": p, "n": i['n'], "v": i['v']})
-            conn.execute(text("UPDATE produtos SET estoque = GREATEST(estoque - 1, 0) WHERE nome = :n"), {"n": i['n']})
+            conn.execute(text("UPDATE produtos SET estoque = GREATEST(COALESCE(estoque, 0) - 1, 0) WHERE nome = :n"), {"n": i['n']})
             linhas_cupom += f"<div class='cupom-row'><span>1x {i['n']}</span><span>{float(i['v']):.2f}</span></div>"
     
     return f"""<html class='cupom-bg'><body onload='window.print();'><div class='cupom'>
@@ -229,7 +261,7 @@ async def lancar_pedido(p: str = Form(...), itens: str = Form(...)):
         <div class='cupom-row cupom-bold'><span>Qtd Item</span><span>Valor</span></div><div class='cupom-divider'></div>
         {linhas_cupom}
         <div class='cupom-divider'></div><div class='cupom-row cupom-bold'><span>TOTAL PEDIDO</span><span>R$ {tot:.2f}</span></div>
-        <div style='text-align:center; margin-top:15px;'>------------------------<br>VIA DE PREPARO</div>
+        <div style='text-align:center; margin-top:15px;'><br>VIA DE PREPARO</div>
     </div></body></html>"""
 
 @app.get("/fechar_conta", response_class=HTMLResponse)
@@ -272,14 +304,14 @@ async def fechar_conta(q: str = ""):
                     </script>
                 </div>"""
             else: res = "<p style='color:red;'>Nenhuma comanda aberta localizada para essa busca.</p>"
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' width='100'><br><h2>Fechar Conta</h2><form method='get'><input class='input-padrao' name='q' placeholder='CPF ou Nº Pulseira' value='{q}' required><button class='btn-acao'>CONSULTAR CONTA</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Fechar Conta</h2><form method='get'><input class='input-padrao' name='q' placeholder='CPF ou Nº Pulseira' value='{q}' required><button class='btn-acao'>CONSULTAR CONTA</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
 
 @app.post("/confirmar_fechamento", response_class=HTMLResponse)
 async def confirmar_fechamento(p: str = Form(...), divisao: int = Form(1)):
     with engine.begin() as conn: 
         c_info = conn.execute(text("SELECT c.nome_completo, p.total_conta FROM pulseiras p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE p.numero_pulseira = :p AND p.status = 'ABERTA'"), {"p": p}).fetchone()
+        if not c_info: return HTMLResponse("<script>alert('Comanda já fechada!'); window.location.href='/central';</script>")
         itens_q = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall()
-        
         conn.execute(text("UPDATE pulseiras SET status = 'FECHADA' WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p})
         conn.execute(text("UPDATE vendas_itens SET status = 'FECHADA' WHERE pulseira_num = :p AND status = 'ABERTA'"), {"p": p})
 
@@ -287,7 +319,7 @@ async def confirmar_fechamento(p: str = Form(...), divisao: int = Form(1)):
     for i in itens_q: linhas_cupom += f"<div class='cupom-row'><span>{i.qtd}x {i.item_nome}</span><span>{float(i.tot):.2f}</span></div>"
     linhas_cupom += f"<div class='cupom-row'><span>1x Couvert Artístico</span><span>7.00</span></div>"
     
-    subt = float(c_info.total_conta)
+    subt = float(c_info.total_conta or 0)
     taxa = subt * 0.10
     tot = subt + taxa
     val_div = tot / divisao
@@ -303,7 +335,7 @@ async def confirmar_fechamento(p: str = Form(...), divisao: int = Form(1)):
         <div class='cupom-row cupom-bold'><span>TOTAL A PAGAR:</span><span>{tot:.2f}</span></div>
         <div class='cupom-row' style='margin-top:10px;'><span>DIVIDIDO POR:</span><span>{divisao} PESSOA(S)</span></div>
         <div class='cupom-row cupom-bold'><span>VALOR POR PESSOA:</span><span>{val_div:.2f}</span></div>
-        <div style='text-align:center; margin-top:20px;'>OBRIGADO E VOLTE SEMPRE!</div>
+        <div style='text-align:center; margin-top:20px;'><br>OBRIGADO E VOLTE SEMPRE!</div>
         <a href='/central' class='no-print'>VOLTAR AO SISTEMA</a>
     </div></body></html>"""
 
@@ -316,7 +348,7 @@ async def tela_busca(q: str = ""):
             for r in query:
                 is_bday = r.data_nascimento.strftime("%m-%d") == date.today().strftime("%m-%d") if r.data_nascimento else False
                 resultados += f"<tr><td style='color:black'>{r.nome_completo}{' 🎁' if is_bday else ''}</td><td><form action='/abrir' method='post' style='display:flex;gap:5px'><input type='hidden' name='cpf' value='{r.cpf}'><input class='input-padrao' name='p' placeholder='Nº Pulseira' required style='width:100px;margin:0'><button class='btn-acao' style='background:#d31a21;padding:8px;margin:0'>ABRIR</button></form></td></tr>"
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' width='100'><br><h2>Buscar Cliente</h2><form method='get'><input class='input-padrao' name='q' placeholder='Nome ou CPF' value='{q}'><button class='btn-acao'>PESQUISAR</button></form><table>{resultados}</table><br><a href='/central'>Voltar</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Buscar Cliente</h2><form method='get'><input class='input-padrao' name='q' placeholder='Nome ou CPF' value='{q}'><button class='btn-acao'>PESQUISAR</button></form><table>{resultados}</table><br><a href='/central'>Voltar</a></div></div></body></html>"
 
 @app.post("/abrir")
 async def abrir(cpf: str = Form(...), p: str = Form(...)):
@@ -331,7 +363,7 @@ async def abrir(cpf: str = Form(...), p: str = Form(...)):
 
 @app.get("/cadastro", response_class=HTMLResponse)
 async def tela_cadastro():
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' width='100'><br><h2>Novo Cliente</h2><form action='/salvar' method='post'><input class='input-padrao' name='nome' placeholder='Nome Completo' required><input class='input-padrao' name='cpf' placeholder='CPF' required><input class='input-padrao' name='nasc' type='date' required><input class='input-padrao' name='contato' placeholder='WhatsApp' required><input class='input-padrao' name='email' type='email' placeholder='E-mail (Opcional)'><input class='input-padrao' name='pulseira' placeholder='Nº Pulseira' required><button class='btn-acao' style='background:#d31a21'>SALVAR E ABRIR</button></form><br><a href='/central'>Voltar</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Novo Cliente</h2><form action='/salvar' method='post'><input class='input-padrao' name='nome' placeholder='Nome Completo' required><input class='input-padrao' name='cpf' placeholder='CPF' required><input class='input-padrao' name='nasc' type='date' required><input class='input-padrao' name='contato' placeholder='WhatsApp' required><input class='input-padrao' name='email' type='email' placeholder='E-mail (Opcional)'><input class='input-padrao' name='pulseira' placeholder='Nº Pulseira' required><button class='btn-acao' style='background:#d31a21'>SALVAR E ABRIR</button></form><br><a href='/central'>Voltar</a></div></div></body></html>"
 
 @app.post("/salvar")
 async def salvar(nome: str = Form(...), cpf: str = Form(...), nasc: str = Form(...), contato: str = Form(...), email: str = Form(None), pulseira: str = Form(...)):

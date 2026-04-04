@@ -19,16 +19,18 @@ with engine.begin() as conn:
         );
         CREATE TABLE IF NOT EXISTS pulseiras (
             id SERIAL PRIMARY KEY, numero_pulseira TEXT NOT NULL, cliente_cpf TEXT REFERENCES clientes(cpf),
-            total_conta DECIMAL(10,2) DEFAULT 7.00
+            total_conta DECIMAL(10,2) DEFAULT 7.00, status TEXT DEFAULT 'ABERTA'
         );
         CREATE TABLE IF NOT EXISTS vendas_itens (
             id SERIAL PRIMARY KEY, pulseira_num TEXT, item_nome TEXT, valor DECIMAL(10,2),
-            data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME
+            data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME, status TEXT DEFAULT 'ABERTA'
+        );
+        CREATE TABLE IF NOT EXISTS estoque (
+            item_nome TEXT UNIQUE NOT NULL, quantidade INT DEFAULT 0
         );
     """))
-    conn.execute(text("ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';"))
-    conn.execute(text("ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';"))
-    conn.execute(text("ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;"))
+    try: conn.execute(text("ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;"))
+    except: pass
 
 CSS = """
 <style>
@@ -53,11 +55,20 @@ CSS = """
     .comanda-footer { padding: 15px; background: white; border-top: 1px solid #ccc; }
     .btn-acao { display: block; width: 100%; padding: 15px; margin-bottom: 8px; border: none; border-radius: 5px; font-weight: bold; color: white; cursor: pointer; text-align: center; text-decoration: none; font-size: 14px; background: #062b5e; }
     .btn-acao:hover { background: #0d4b9c; }
-    .container-center { display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; }
-    .card-center { background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 500px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+    .container-center { display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; overflow-y: auto;}
+    .card-center { background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 500px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); margin: auto; }
     .input-padrao { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
+    
+    .cupom-bg { background: #fff; color: #000; font-family: 'Courier New', Courier, monospace; height: auto; display: block; overflow: visible; padding: 20px; }
+    .cupom { width: 300px; margin: 0 auto; font-size: 13px; text-transform: uppercase; }
+    .cupom-head { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 10px; }
+    .cupom-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+    .cupom-divider { border-top: 1px dashed #000; margin: 10px 0; }
+    .cupom-bold { font-weight: bold; font-size: 15px; }
+    .no-print { display: block; width: 300px; margin: 20px auto; text-align: center; background: #d31a21; color: white; padding: 15px; text-decoration: none; font-weight: bold; font-family: sans-serif; border-radius: 5px; }
+    @media print { .no-print { display: none !important; } body { background: white; } }
 </style>
 """
 
@@ -82,12 +93,29 @@ async def login(request: Request, user: str = Form(...), pw: str = Form(...)):
 @app.get("/central", response_class=HTMLResponse)
 async def central(request: Request):
     if "user" not in request.session: return RedirectResponse(url="/")
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' width='120'><br><br><a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a><a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / VENDAS</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a><br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' width='120'><br><br><a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a><a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / VENDAS</a><a href='/estoque' class='btn-acao' style='background:#e67e22'>📦 GESTÃO DE ESTOQUE</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a><br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"
+
+@app.get("/estoque", response_class=HTMLResponse)
+async def tela_estoque(request: Request):
+    if "user" not in request.session or request.session["user"] != "admin": return RedirectResponse(url="/central")
+    with engine.connect() as conn:
+        est = {r.item_nome: r.quantidade for r in conn.execute(text("SELECT item_nome, quantidade FROM estoque")).fetchall()}
+    linhas = ""
+    for cat, itens in MENU.items():
+        linhas += f"<tr><td colspan='3' style='background:#082d5e; color:white; font-weight:bold;'>{cat}</td></tr>"
+        for n, v in itens:
+            qtd = est.get(n, 0)
+            linhas += f"<tr><td style='color:black'>{n}</td><td style='color:black; font-weight:bold;'>{qtd}</td><td><form action='/att_estoque' method='post' style='display:flex;gap:5px;margin:0'><input type='hidden' name='i' value='{n}'><input type='number' name='q' class='input-padrao' style='width:70px;margin:0;padding:5px' required><button class='btn-acao' style='background:#28a745;margin:0;padding:8px'>ADD</button></form></td></tr>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><h2>Gestão de Estoque</h2><div style='max-height:400px; overflow-y:auto;'><table><tr><th style='color:black'>Item</th><th style='color:black'>Qtd</th><th style='color:black'>Ação</th></tr>{linhas}</table></div><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
+
+@app.post("/att_estoque")
+async def att_estoque(i: str = Form(...), q: int = Form(...)):
+    with engine.begin() as conn: conn.execute(text("INSERT INTO estoque (item_nome, quantidade) VALUES (:i, :q) ON CONFLICT (item_nome) DO UPDATE SET quantidade = estoque.quantidade + :q"), {"i": i, "q": q})
+    return RedirectResponse(url="/estoque", status_code=303)
 
 @app.get("/vendas", response_class=HTMLResponse)
 async def vendas(cat: str = "CHOPP", p: str = ""):
     prods = "".join([f"<div class='prod-card' onclick='add(\"{n}\", {v})'><b>{n}</b><span>R$ {v:.2f}</span></div>" for n, v in MENU.get(cat, [])])
-    
     itens_html = ""
     if p:
         with engine.connect() as conn:
@@ -113,21 +141,20 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
 
     return f"""<html><head>{CSS}
     <script>
-        let cart = [];
-        const p_num = new URLSearchParams(window.location.search).get("p");
+        let cart = []; const p_num = new URLSearchParams(window.location.search).get("p");
         function add(n, v){{ if(!p_num) return alert("Defina a pulseira primeiro!"); cart.push({{n, v}}); render(); }}
         function render(){{
             let html = ""; let t = 0;
             cart.forEach((i, idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black;'>X</b></span></div>`; t += i.v; }});
-            document.getElementById('novo-pedido').innerHTML = html;
-            document.getElementById('tot-pedido').innerText = "R$ " + t.toFixed(2);
+            document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = "R$ " + t.toFixed(2);
         }}
         function rem(idx) {{ cart.splice(idx, 1); render(); }}
-        async function enviarPedido() {{
+        function enviarPedido() {{
             if(!p_num || cart.length === 0) return alert("Adicione itens ao pedido!");
-            let fd = new FormData(); fd.append("p", p_num); fd.append("itens", JSON.stringify(cart));
-            await fetch("/lancar_pedido", {{method: "POST", body: fd}});
-            alert("Pedido Enviado!"); window.location.reload();
+            let f = document.createElement("form"); f.method = "POST"; f.action = "/lancar_pedido"; f.target = "_blank";
+            let i1 = document.createElement("input"); i1.name = "p"; i1.value = p_num; f.appendChild(i1);
+            let i2 = document.createElement("input"); i2.name = "itens"; i2.value = JSON.stringify(cart); f.appendChild(i2);
+            document.body.appendChild(f); f.submit(); setTimeout(() => window.location.reload(), 1500);
         }}
         function setPulseira() {{ let num = prompt("Número da Pulseira ativa:"); if(num) window.location.href=`/vendas?cat={cat}&p=${{num}}`; }}
     </script>
@@ -146,14 +173,25 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
         <div class='comanda-lateral'>{comanda_display}</div>
     </div></body></html>"""
 
-@app.post("/lancar_pedido")
+@app.post("/lancar_pedido", response_class=HTMLResponse)
 async def lancar_pedido(p: str = Form(...), itens: str = Form(...)):
     lista = json.loads(itens)
     tot = sum(i['v'] for i in lista)
+    linhas_cupom = ""
     with engine.begin() as conn:
         conn.execute(text("UPDATE pulseiras SET total_conta = total_conta + :t WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"t": tot, "p": p})
-        for i in lista: conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor, status) VALUES (:p, :n, :v, 'ABERTA')"), {"p": p, "n": i['n'], "v": i['v']})
-    return "ok"
+        for i in lista:
+            conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor, status) VALUES (:p, :n, :v, 'ABERTA')"), {"p": p, "n": i['n'], "v": i['v']})
+            conn.execute(text("INSERT INTO estoque (item_nome, quantidade) VALUES (:n, -1) ON CONFLICT (item_nome) DO UPDATE SET quantidade = estoque.quantidade - 1"), {"n": i['n']})
+            linhas_cupom += f"<div class='cupom-row'><span>1x {i['n']}</span><span>{i['v']:.2f}</span></div>"
+    
+    return f"""<html class='cupom-bg'><body onload='window.print();'><div class='cupom'>
+        <div class='cupom-head'><b>QUIOSQUE CHOPP BRAHMA</b><br>TICKET DE PREPARO<br><br>PULSEIRA: {p}</div>
+        <div class='cupom-row cupom-bold'><span>Qtd Item</span><span>Valor</span></div><div class='cupom-divider'></div>
+        {linhas_cupom}
+        <div class='cupom-divider'></div><div class='cupom-row cupom-bold'><span>TOTAL PEDIDO</span><span>R$ {tot:.2f}</span></div>
+        <div style='text-align:center; margin-top:15px;'>------------------------<br>VIA DO ESTABELECIMENTO</div>
+    </div></body></html>"""
 
 @app.get("/fechar_conta", response_class=HTMLResponse)
 async def fechar_conta(q: str = ""):
@@ -174,25 +212,61 @@ async def fechar_conta(q: str = ""):
                     <h3 style='text-align:center; margin-bottom:5px;'>{query.nome_completo}</h3>
                     <p style='text-align:center; margin-top:0; font-weight:bold'>Pulseira: {query.numero_pulseira}</p>
                     <div style='background:white; padding:15px; border-radius:8px; max-height:220px; overflow-y:auto; border:1px solid #ddd;'>{lista}</div>
-                    <div style='padding-top:15px; font-size:18px;'>
+                    <div style='padding-top:15px; font-size:16px;'>
                         <div class='item-linha'><span>Subtotal Consumo:</span><span>R$ {subtotal:.2f}</span></div>
-                        <div class='item-linha' style='color:#d31a21'><span>Taxa Serviço (10%):</span><span>R$ {taxa:.2f}</span></div>
-                        <div class='item-linha' style='font-weight:bold; font-size:22px;'><span>TOTAL A PAGAR:</span><span>R$ {total_final:.2f}</span></div>
+                        <div class='item-linha'><span>Taxa Serviço (10%):</span><span>R$ {taxa:.2f}</span></div>
+                        <div class='item-linha' style='font-weight:bold; font-size:20px; color:#d31a21'><span>TOTAL:</span><span>R$ {total_final:.2f}</span></div>
+                        <div class='item-linha' style='margin-top:10px;'><span>Dividir por:</span><input type='number' id='divisores' value='1' min='1' style='width:60px; text-align:center; border:1px solid #ccc; border-radius:3px;' oninput='calcDiv()'></div>
+                        <div class='item-linha' style='font-weight:bold; font-size:18px;'><span>Por Pessoa:</span><span id='val_pessoa'>R$ {total_final:.2f}</span></div>
                     </div>
-                    <form action='/confirmar_fechamento' method='post'>
+                    <form action='/confirmar_fechamento' method='post' target='_blank' onsubmit='setTimeout(()=>window.location.href="/central", 1000)'>
                         <input type='hidden' name='p' value='{query.numero_pulseira}'>
-                        <button class='btn-acao' style='background:#28a745; font-size:18px; margin-top:15px;'>💰 CONFIRMAR PAGAMENTO</button>
+                        <input type='hidden' name='divisao' id='input_div' value='1'>
+                        <button class='btn-acao' style='background:#28a745; font-size:18px; margin-top:15px;'>🖨️ CONFIRMAR E IMPRIMIR RECIBO</button>
                     </form>
+                    <script>
+                        function calcDiv() {{
+                            let div = parseInt(document.getElementById('divisores').value) || 1;
+                            let tot = {total_final}; document.getElementById('val_pessoa').innerText = "R$ " + (tot / div).toFixed(2);
+                            document.getElementById('input_div').value = div;
+                        }}
+                    </script>
                 </div>"""
             else: res = "<p style='color:red;'>Nenhuma comanda aberta localizada para essa busca.</p>"
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><img src='https://logodownload.org/wp-content/uploads/2014/07/brahma-logo-2.png' width='100'><br><h2>Fechar Conta</h2><form method='get'><input class='input-padrao' name='q' placeholder='CPF ou Nº Pulseira' value='{q}' required><button class='btn-acao'>CONSULTAR CONTA</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
 
-@app.post("/confirmar_fechamento")
-async def confirmar_fechamento(p: str = Form(...)):
+@app.post("/confirmar_fechamento", response_class=HTMLResponse)
+async def confirmar_fechamento(p: str = Form(...), divisao: int = Form(1)):
     with engine.begin() as conn: 
+        c_info = conn.execute(text("SELECT c.nome_completo, p.total_conta FROM pulseiras p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE p.numero_pulseira = :p AND p.status = 'ABERTA'"), {"p": p}).fetchone()
+        itens_q = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall()
+        
         conn.execute(text("UPDATE pulseiras SET status = 'FECHADA' WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p})
         conn.execute(text("UPDATE vendas_itens SET status = 'FECHADA' WHERE pulseira_num = :p AND status = 'ABERTA'"), {"p": p})
-    return HTMLResponse("<script>alert('Conta Fechada com Sucesso!'); window.location.href='/central';</script>")
+
+    linhas_cupom = ""
+    for i in itens_q: linhas_cupom += f"<div class='cupom-row'><span>{i.qtd}x {i.item_nome}</span><span>{float(i.tot):.2f}</span></div>"
+    linhas_cupom += f"<div class='cupom-row'><span>1x Couvert Artístico</span><span>7.00</span></div>"
+    
+    subt = float(c_info.total_conta)
+    taxa = subt * 0.10
+    tot = subt + taxa
+    val_div = tot / divisao
+
+    return f"""<html class='cupom-bg'><body onload='window.print();'><div class='cupom'>
+        <div class='cupom-head'><b>QUIOSQUE CHOPP BRAHMA</b><br>CONFERENCIA DE MESA<br>NÃO É DOCUMENTO FISCAL<br><br>Cliente: {c_info.nome_completo}<br>Pulseira: {p}</div>
+        <div class='cupom-row cupom-bold'><span>Qtd Item</span><span>Valor</span></div><div class='cupom-divider'></div>
+        {linhas_cupom}
+        <div class='cupom-divider'></div>
+        <div class='cupom-row'><span>SUBTOTAL PRODUTOS:</span><span>{subt:.2f}</span></div>
+        <div class='cupom-row'><span>SERVICOS 10%:</span><span>{taxa:.2f}</span></div>
+        <div class='cupom-divider'></div>
+        <div class='cupom-row cupom-bold'><span>TOTAL:</span><span>{tot:.2f}</span></div>
+        <div class='cupom-row' style='margin-top:10px;'><span>DIVIDIDO POR:</span><span>{divisao} PESSOA(S)</span></div>
+        <div class='cupom-row cupom-bold'><span>VALOR POR PESSOA:</span><span>{val_div:.2f}</span></div>
+        <div style='text-align:center; margin-top:20px;'>OBRIGADO E VOLTE SEMPRE!</div>
+        <a href='/central' class='no-print'>VOLTAR AO SISTEMA</a>
+    </div></body></html>"""
 
 @app.get("/buscar", response_class=HTMLResponse)
 async def tela_busca(q: str = ""):

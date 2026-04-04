@@ -29,12 +29,12 @@ with engine.begin() as conn:
 
 # Tenta criar as colunas novas sem destruir a tabela
 MIGRACOES = [
-    "ALTER TABLE pulseiras ADD COLUMN status TEXT DEFAULT 'ABERTA';",
-    "ALTER TABLE vendas_itens ADD COLUMN status TEXT DEFAULT 'ABERTA';",
-    "ALTER TABLE pulseiras DROP CONSTRAINT pulseiras_numero_pulseira_key;",
-    "ALTER TABLE produtos ADD COLUMN categoria TEXT DEFAULT 'OUTROS';",
-    "ALTER TABLE produtos ADD COLUMN preco DECIMAL(10,2) DEFAULT 0.00;",
-    "ALTER TABLE produtos ADD COLUMN estoque INT DEFAULT 0;"
+    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
+    "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
+    "ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;",
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'OUTROS';",
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco DECIMAL(10,2) DEFAULT 0.00;",
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque INT DEFAULT 0;"
 ]
 for mig in MIGRACOES:
     try:
@@ -85,12 +85,19 @@ CSS = """
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
     
-    /* LAYOUT TÉRMICO DEFINITIVO (Padrão Bar do Cuscuz) */
+    /* ========================================================
+       CUPOM TÉRMICO PROFISSIONAL (PADRÃO BAR DO CUSCUZ/EPSON) 
+       ======================================================== */
     .cupom-bg { background: #555; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px; margin: 0; font-family: 'Courier New', Courier, monospace; color: black; }
-    .cupom { width: 300px; font-size: 13px; font-weight: bold; text-transform: uppercase; background: white; color: black; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-    .cupom-head { text-align: center; margin-bottom: 5px; font-size: 13px; line-height: 1.2; }
-    .cupom-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
-    .cupom-divider { border-top: 1px dashed #000; margin: 6px 0; }
+    .cupom { width: 300px; font-size: 13px; font-weight: bold; background: white; color: black; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); text-transform: uppercase; }
+    .cupom-head { text-align: center; margin-bottom: 5px; font-size: 13px; line-height: 1.3; }
+    .cupom-linha { border-bottom: 1px dashed #000; margin: 6px 0; }
+    .cupom-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 5px;}
+    .cupom-table th, .cupom-table td { padding: 2px 0; vertical-align: top; }
+    .cupom-table th { border-bottom: 1px dashed #000; border-top: 1px dashed #000; text-align: left;}
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .flex-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
     .cupom-bold { font-size: 15px; font-weight: 900; }
     .no-print { display: block; width: 300px; margin: 20px auto; text-align: center; background: #d31a21; color: white; padding: 15px; text-decoration: none; border-radius: 5px; font-family: sans-serif; font-size: 16px; font-weight: bold; }
     
@@ -381,19 +388,25 @@ async def lancar_pedido(request: Request):
                 conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor, status) VALUES (:p, :n, :v, 'ABERTA')"), {"p": p, "n": i['n'], "v": i['v']})
                 conn.execute(text("UPDATE produtos SET estoque = GREATEST(COALESCE(estoque, 0) - 1, 0) WHERE nome = :n"), {"n": i['n']})
                 
-                nome_formatado = i['n'][:22]
-                linhas_cupom += f"<div>{nome_formatado}<br>{1} x {float(i['v']):.2f} <span style='float:right'>{float(i['v']):.2f}</span></div>"
+                # Monta as linhas da tabela em HTML no formato (Nome em cima, QtdxVal em baixo)
+                linhas_cupom += f"<tr><td colspan='2'>{i['n']}</td></tr>"
+                linhas_cupom += f"<tr><td>1 x {float(i['v']):.2f}</td><td class='text-right'>{float(i['v']):.2f}</td></tr>"
     except Exception: pass
     
     return f"""<html class='cupom-bg'><body onload='window.print();'><div class='cupom'>
-        <div class='cupom-head'><b>QUIOSQUE CHOPP BRAHMA</b><br>TICKET DE PREPARO<br>PULSEIRA: <b>{p}</b></div>
-        <div class='cupom-divider'></div>
-        <div class='cupom-row cupom-bold'><span>Qtd x Vl.Unit</span><span>Vl.Total</span></div>
-        <div class='cupom-divider'></div>
-        {linhas_cupom}
-        <div class='cupom-divider'></div>
-        <div class='cupom-row cupom-bold' style='font-size:16px;'><span>TOTAL PEDIDO</span><span>{tot:.2f}</span></div>
-        <div class='cupom-divider'></div>
+        <div class='cupom-head'>
+            <b>QUIOSQUE CHOPP BRAHMA</b><br>
+            TICKET DE PREPARO DE BALCAO<br>
+            PULSEIRA: <b>{p}</b>
+        </div>
+        <div class='cupom-linha'></div>
+        <table class='cupom-table'>
+            <tr><th>QTD X VL.UN</th><th class='text-right'>VL.TOT</th></tr>
+            {linhas_cupom}
+        </table>
+        <div class='cupom-linha'></div>
+        <div class='flex-row cupom-bold' style='font-size:16px;'><span>TOTAL R$</span><span>{tot:.2f}</span></div>
+        <div class='cupom-linha'></div>
         <div style='text-align:center; margin-top:10px; font-size:11px;'>VIA DE PREPARO</div>
     </div></body></html>"""
 
@@ -444,8 +457,8 @@ async def fechar_conta(q: str = ""):
                             <select id='select_pag' class='input-padrao' style='width:auto; padding:5px; margin:0;' onchange='document.getElementById("input_pag_form").value = this.value'>
                                 <option value='DINHEIRO'>DINHEIRO</option>
                                 <option value='PIX'>PIX</option>
-                                <option value='C. CRÉDITO'>C. CRÉDITO</option>
-                                <option value='C. DÉBITO'>C. DÉBITO</option>
+                                <option value='C. CREDITO'>C. CREDITO</option>
+                                <option value='C. DEBITO'>C. DEBITO</option>
                             </select>
                         </div>
                     </div>
@@ -462,18 +475,16 @@ async def fechar_conta(q: str = ""):
                         function calcDiv() {{
                             let subtotal = {subtotal};
                             let taxa = {taxa};
-                            // Pega o valor do desconto (substitui vírgula por ponto para não dar erro na matemática)
                             let descInput = document.getElementById('input_desconto').value.replace(',', '.');
                             let desc = parseFloat(descInput) || 0;
                             let div = parseInt(document.getElementById('divisores').value) || 1;
                             
                             let totFinal = subtotal + taxa - desc;
-                            if (totFinal < 0) totFinal = 0; // Não deixa o total ficar negativo
+                            if (totFinal < 0) totFinal = 0;
                             
                             document.getElementById('tot_final').innerText = "R$ " + totFinal.toFixed(2);
                             document.getElementById('val_pessoa').innerText = "R$ " + (totFinal / div).toFixed(2);
                             
-                            // Atualiza os dados invisíveis que vão para o Python
                             document.getElementById('input_div').value = div;
                             document.getElementById('input_desc_form').value = desc;
                         }}
@@ -506,11 +517,13 @@ async def confirmar_fechamento(request: Request):
 
         linhas_cupom = ""
         for i in itens_q: 
-            nome_item = i.item_nome[:20]
             v_unit = float(i.tot) / i.qtd if i.qtd > 0 else 0
-            linhas_cupom += f"<div>{nome_item}<br>{i.qtd} x {v_unit:.2f} <span style='float:right'>{float(i.tot or 0):.2f}</span></div>"
+            # Adiciona Nome do item numa linha e os valores embaixo (padrao bobina)
+            linhas_cupom += f"<tr><td colspan='2'>{i.item_nome}</td></tr>"
+            linhas_cupom += f"<tr><td>{i.qtd} x {v_unit:.2f}</td><td class='text-right'>{float(i.tot or 0):.2f}</td></tr>"
         
-        linhas_cupom += f"<div>Couvert Artistico<br>1 x 7.00 <span style='float:right'>7.00</span></div>"
+        linhas_cupom += f"<tr><td colspan='2'>COUVERT ARTISTICO</td></tr>"
+        linhas_cupom += f"<tr><td>1 x 7.00</td><td class='text-right'>7.00</td></tr>"
         
         subt = float(c_info.total_conta or 0)
         taxa = subt * 0.10
@@ -525,29 +538,30 @@ async def confirmar_fechamento(request: Request):
                 <b>QUIOSQUE CHOPP BRAHMA</b><br>
                 NOTA DE CONFERENCIA<br>
                 AGUARDE SUA NOTA FISCAL<br>
-                Tel: (61) 99999-9999
+                TEL: (61) 99999-9999
             </div>
-            <div class='cupom-divider'></div>
+            <div class='cupom-linha'></div>
             <div>
                 PULSEIRA: {p}<br>
                 CLIENTE: {c_info.nome_completo[:20]}<br>
                 DATA: {data_atual}
             </div>
-            <div class='cupom-divider'></div>
-            <div class='cupom-bold'>Qtd. x Vl.Unit <span style='float:right'>Vl.Total</span></div>
-            <div class='cupom-divider'></div>
-            {linhas_cupom}
-            <div class='cupom-divider'></div>
-            <div class='cupom-row'><span>PRODUTOS</span><span>{subt:.2f}</span></div>
-            <div class='cupom-row'><span>SERVICOS 10%</span><span>{taxa:.2f}</span></div>
-            <div class='cupom-row'><span>DESCONTO</span><span>- {desc_val:.2f}</span></div>
-            <div class='cupom-divider'></div>
-            <div class='cupom-row cupom-bold' style='font-size:18px;'><span>TOTAL</span><span>{tot:.2f}</span></div>
-            <div class='cupom-divider'></div>
-            <div class='cupom-row'><span>PAGAMENTO:</span><span>{pagamento}</span></div>
-            <div class='cupom-row'><span>DIVIDIDO POR:</span><span>{div_val} PESSOA(S)</span></div>
-            <div class='cupom-row cupom-bold'><span>VALOR POR PESSOA:</span><span>{val_div:.2f}</span></div>
-            <div class='cupom-divider'></div>
+            <div class='cupom-linha'></div>
+            <table class='cupom-table'>
+                <tr><th>QTD X VL.UN</th><th class='text-right'>VL.TOT</th></tr>
+                {linhas_cupom}
+            </table>
+            <div class='cupom-linha'></div>
+            <div class='flex-row'><span>PRODUTOS</span><span>{subt:.2f}</span></div>
+            <div class='flex-row'><span>SERVICOS 10%</span><span>{taxa:.2f}</span></div>
+            <div class='flex-row'><span>DESCONTO</span><span>- {desc_val:.2f}</span></div>
+            <div class='cupom-linha'></div>
+            <div class='flex-row cupom-bold' style='font-size:18px;'><span>TOTAL R$</span><span>{tot:.2f}</span></div>
+            <div class='cupom-linha'></div>
+            <div class='flex-row'><span>PAGAMENTO:</span><span>{pagamento}</span></div>
+            <div class='flex-row'><span>DIVIDIDO POR:</span><span>{div_val} PESSOA(S)</span></div>
+            <div class='flex-row cupom-bold'><span>POR PESSOA R$:</span><span>{val_div:.2f}</span></div>
+            <div class='cupom-linha'></div>
             <div style='text-align:center; font-size:11px; line-height: 1.2;'>
                 COMANDA DE CIRCULACAO INTERNA<br>
                 NAO TEM VALOR FISCAL<br>

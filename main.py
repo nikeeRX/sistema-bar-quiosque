@@ -49,8 +49,15 @@ try:
                 conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 100) ON CONFLICT (nome) DO NOTHING"), {"n": n, "c": cat, "p": p})
 except Exception: pass
 
+# --- AQUI ESTÁ O CSS E AS TAGS EXCLUSIVAS DA APPLE ---
 CSS = """
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Brahma">
+<link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png">
+
 <style>
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
     body { margin: 0; background: #0a3a7a; color: white; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -92,7 +99,7 @@ CSS = """
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
     
-    /* LAYOUT TÉRMICO DEFINITIVO (Padrão Bar do Cuscuz/EPSON) */
+    /* LAYOUT TÉRMICO DEFINITIVO */
     .cupom-bg { background: #555; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px; margin: 0; font-family: 'Courier New', Courier, monospace; color: black; }
     .cupom { width: 300px; font-size: 13px; font-weight: bold; background: white; color: black; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); text-transform: uppercase; }
     .cupom-head { text-align: center; margin-bottom: 5px; font-size: 13px; line-height: 1.3; }
@@ -265,18 +272,15 @@ async def central(request: Request):
     user = request.session.get("user")
     if not user: return RedirectResponse(url="/")
     
-    # Botões liberados para todos (Garçom e Admin)
     botoes_menu = f"""
         <a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO</a>
         <a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a>
         <a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / VENDAS</a>
     """
     
-    # Botões EXCLUSIVOS para o Chefe (Admin)
     if user == "admin":
         botoes_menu += "<a href='/estoque' class='btn-acao' style='background:#e67e22'>📦 GESTÃO DE ESTOQUE</a>"
         
-    # Botão de Fechar Conta (Para Todos)
     botoes_menu += "<a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a>"
 
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}{botoes_menu}<br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"

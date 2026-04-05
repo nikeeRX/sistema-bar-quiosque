@@ -337,14 +337,19 @@ async def tela_estoque(request: Request):
     curr_cat = ""
     
     with engine.connect() as conn:
-        prods_db = conn.execute(text("SELECT nome, categoria, preco, estoque FROM produtos ORDER BY categoria, nome")).fetchall()
+        # 1. Adicionamos o 'id' aqui no SELECT do banco de dados
+        prods_db = conn.execute(text("SELECT id, nome, categoria, preco, estoque FROM produtos ORDER BY categoria, nome")).fetchall()
         for r in prods_db:
             cat_val = r.categoria or "OUTROS"
             p_val = float(r.preco or 0)
             e_val = int(r.estoque or 0)
             
+            # 2. Formatamos o ID para ficar com 3 dígitos (ex: #001, #015)
+            cod_formatado = f"#{r.id:03d}"
+            
             if cat_val != curr_cat:
-                linhas += f"<tr><td colspan='3' style='background:#082d5e; color:white; font-weight:bold; text-align:center;'>{cat_val}</td></tr>"
+                # Mudamos o colspan para 4 porque agora temos mais uma coluna
+                linhas += f"<tr><td colspan='4' style='background:#082d5e; color:white; font-weight:bold; text-align:center;'>{cat_val}</td></tr>"
                 curr_cat = cat_val
                 
             acoes = f"""
@@ -361,7 +366,8 @@ async def tela_estoque(request: Request):
                 </form>
             </div>
             """
-            linhas += f"<tr><td style='color:black; line-height:1.2;'>{r.nome} <br><small style='color:#666;'>R$ {p_val:.2f}</small></td><td style='color:black; font-weight:bold; font-size:18px;'>{e_val}</td><td>{acoes}</td></tr>"
+            # 3. Adicionamos a coluna do Código Formato na linha da tabela
+            linhas += f"<tr><td style='color:#d31a21; font-weight:bold;'>{cod_formatado}</td><td style='color:black; line-height:1.2;'>{r.nome} <br><small style='color:#666;'>R$ {p_val:.2f}</small></td><td style='color:black; font-weight:bold; font-size:18px;'>{e_val}</td><td>{acoes}</td></tr>"
             
     add_form = f"""
     <div style='background:#f4f4f4; padding:20px; border-radius:10px; margin-bottom:20px; text-align:left; border:1px solid #ccc;'>
@@ -385,7 +391,7 @@ async def tela_estoque(request: Request):
     html_estoque = f"""
     <html>
     <head>
-        {CSS}
+        {{CSS}}
         <script>
             function editarProd(n_a, p_a) {{ 
                 let n_n = prompt("Novo Nome:", n_a); 
@@ -409,7 +415,7 @@ async def tela_estoque(request: Request):
                 {add_form}
                 <div style='max-height:400px; overflow-y:auto; border:1px solid #ddd;'>
                     <table>
-                        <tr><th style='color:black'>Item</th><th style='color:black'>Qtd</th><th style='color:black'>Ação</th></tr>
+                        <tr><th style='color:black'>Cód</th><th style='color:black'>Item</th><th style='color:black'>Qtd</th><th style='color:black'>Ação</th></tr>
                         {linhas}
                     </table>
                 </div>

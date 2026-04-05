@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import create_engine, text
 from starlette.middleware.sessions import SessionMiddleware
@@ -120,21 +120,16 @@ CSS = """
         body { height: auto; overflow: auto; }
         .layout-vendas { display: flex; flex-direction: column; height: auto; min-height: 100vh; }
         
-        /* Menu lateral vira um carrossel no topo */
         .menu-lateral { width: 100%; flex-direction: row; overflow-x: auto; padding: 10px; border-right: none; border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; gap: 8px; flex-shrink: 0; white-space: nowrap; -webkit-overflow-scrolling: touch; }
         .btn-menu { padding: 10px 15px; font-size: 14px; text-align: center; flex: 0 0 auto; justify-content: center; }
         
-        /* Área Principal de Produtos */
         .main-area { display: flex; overflow: visible; padding: 15px; flex-shrink: 0; }
         .grid-produtos { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
         .prod-card { min-height: 110px; padding: 10px; }
         .prod-card b { font-size: 13px; }
         .prod-card span { font-size: 14px; }
         
-        /* A Comanda vai para o final da tela inteira */
         .comanda-lateral { width: 100%; display: flex; border-left: none; border-top: 5px solid #d31a21; flex-shrink: 0; }
-        
-        /* Telas centrais ajustadas (Buscar, Caixa, Estoque) */
         .card-center { width: 95%; padding: 20px; }
     }
 </style>
@@ -159,9 +154,76 @@ IMG_LOGO_PEQ = """
 </div>
 """
 
+# --- ROTAS PARA A INSTALAÇÃO DO APLICATIVO (PWA) ---
+@app.get("/manifest.json")
+async def get_manifest():
+    return {
+        "name": "Quiosque Brahma",
+        "short_name": "BrahmaApp",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#0a3a7a",
+        "theme_color": "#d31a21",
+        "icons": [
+            {
+                "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any maskable"
+            }
+        ]
+    }
+
+@app.get("/sw.js")
+async def get_sw():
+    js_code = """
+    self.addEventListener('install', e => { self.skipWaiting(); });
+    self.addEventListener('activate', e => { e.waitUntil(clients.claim()); });
+    self.addEventListener('fetch', e => {});
+    """
+    return Response(content=js_code, media_type="application/javascript")
+
 @app.get("/", response_class=HTMLResponse)
 async def login_page():
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO}<h2>Acesso Restrito</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form></div></div></body></html>"
+    # Injetamos o arquivo de manifesto e o botão de instalação dinâmico!
+    html_login = f"""<html><head>{CSS}
+    <link rel="manifest" href="/manifest.json">
+    <script>
+        if ('serviceWorker' in navigator) {{
+            navigator.serviceWorker.register('/sw.js');
+        }}
+        let promptInstalacao;
+        window.addEventListener('beforeinstallprompt', (e) => {{
+            e.preventDefault();
+            promptInstalacao = e;
+            // O botão só aparece se o celular suportar a instalação do App
+            document.getElementById('btn-instalar').style.display = 'block';
+        }});
+        function instalarApp() {{
+            if (promptInstalacao) {{
+                promptInstalacao.prompt();
+                promptInstalacao.userChoice.then((choiceResult) => {{
+                    if (choiceResult.outcome === 'accepted') {{
+                        document.getElementById('btn-instalar').style.display = 'none';
+                    }}
+                    promptInstalacao = null;
+                }});
+            }}
+        }}
+    </script>
+    </head><body><div class='container-center'><div class='card-center'>
+        {IMG_LOGO}
+        <h2>Acesso Restrito</h2>
+        <form action='/login' method='post'>
+            <input class='input-padrao' name='user' placeholder='Usuário' required>
+            <input class='input-padrao' name='pw' type='password' placeholder='Senha' required>
+            <button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button>
+        </form>
+        <button id='btn-instalar' class='btn-acao' style='display:none; background:#ffc107; color:black; margin-top:15px; font-size:16px;' onclick='instalarApp()'>
+            📱 INSTALAR APLICATIVO
+        </button>
+    </div></div></body></html>"""
+    return html_login
 
 @app.post("/login")
 async def login(request: Request):
@@ -465,7 +527,7 @@ async def fechar_conta(q: str = ""):
                         <div class='item-linha' style='color:#062b5e;'>
                             <span style='padding-top:5px;'>Desconto (R$):</span>
                             <div style='display:flex; gap:5px;'>
-                                <input type='number' id='input_desconto' value='0' min='0' step='0.01' style='width:80px; text-align:right; border:1px solid #ccc; border-radius:3px; padding:5px;' placeholder='0.00'>
+                                <input type='number' id='input_desconto' value='0' min='0' step='0.01' style='width:70px; text-align:right; border:1px solid #ccc; border-radius:3px; padding:5px;' placeholder='0.00'>
                                 <button type='button' onclick='calcDiv()' style='background:#062b5e; color:white; border:none; border-radius:3px; padding:5px 10px; cursor:pointer; font-weight:bold;'>APLICAR</button>
                             </div>
                         </div>

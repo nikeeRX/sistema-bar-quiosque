@@ -185,7 +185,6 @@ async def get_sw():
 
 @app.get("/", response_class=HTMLResponse)
 async def login_page():
-    # Injetamos o arquivo de manifesto e o botão de instalação dinâmico!
     html_login = f"""<html><head>{CSS}
     <link rel="manifest" href="/manifest.json">
     <script>
@@ -196,7 +195,6 @@ async def login_page():
         window.addEventListener('beforeinstallprompt', (e) => {{
             e.preventDefault();
             promptInstalacao = e;
-            // O botão só aparece se o celular suportar a instalação do App
             document.getElementById('btn-instalar').style.display = 'block';
         }});
         function instalarApp() {{
@@ -237,12 +235,28 @@ async def login(request: Request):
 
 @app.get("/central", response_class=HTMLResponse)
 async def central(request: Request):
-    if "user" not in request.session: return RedirectResponse(url="/")
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a><a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / VENDAS</a><a href='/estoque' class='btn-acao' style='background:#e67e22'>📦 GESTÃO DE ESTOQUE</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a><br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"
+    user = request.session.get("user")
+    if not user: return RedirectResponse(url="/")
+    
+    # Botões liberados para todos (Garçom e Admin)
+    botoes_menu = f"""
+        <a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO</a>
+        <a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a>
+        <a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / VENDAS</a>
+    """
+    
+    # Botões EXCLUSIVOS para o Chefe (Admin)
+    if user == "admin":
+        botoes_menu += "<a href='/estoque' class='btn-acao' style='background:#e67e22'>📦 GESTÃO DE ESTOQUE</a>"
+        
+    # Botão de Fechar Conta (Para Todos)
+    botoes_menu += "<a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a>"
+
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}{botoes_menu}<br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"
 
 @app.get("/estoque", response_class=HTMLResponse)
 async def tela_estoque(request: Request):
-    if "user" not in request.session or request.session["user"] != "admin": return RedirectResponse(url="/central")
+    if request.session.get("user") != "admin": return RedirectResponse(url="/central")
     linhas = ""
     curr_cat = ""
     with engine.connect() as conn:
@@ -306,6 +320,7 @@ async def tela_estoque(request: Request):
 
 @app.post("/novo_produto")
 async def novo_produto(request: Request):
+    if request.session.get("user") != "admin": return RedirectResponse(url="/central", status_code=303)
     try:
         form = await request.form()
         nome = form.get("nome", "").strip()
@@ -327,6 +342,7 @@ async def novo_produto(request: Request):
 
 @app.post("/att_estoque")
 async def att_estoque(request: Request):
+    if request.session.get("user") != "admin": return RedirectResponse(url="/central", status_code=303)
     try:
         form = await request.form()
         i = form.get("i", "")
@@ -340,6 +356,7 @@ async def att_estoque(request: Request):
 
 @app.post("/editar_produto")
 async def editar_produto(request: Request):
+    if request.session.get("user") != "admin": return RedirectResponse(url="/central", status_code=303)
     try:
         form = await request.form()
         nome_antigo = form.get("nome_antigo", "")
@@ -355,6 +372,7 @@ async def editar_produto(request: Request):
 
 @app.post("/excluir_produto")
 async def excluir_produto(request: Request):
+    if request.session.get("user") != "admin": return RedirectResponse(url="/central", status_code=303)
     try:
         form = await request.form()
         nome = form.get("nome", "")

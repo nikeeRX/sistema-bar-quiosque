@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Form, Request, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import create_engine, text
 from starlette.middleware.sessions import SessionMiddleware
@@ -957,6 +957,5 @@ async def api_impresso(job_id: int):
 # Rota para o Admin baixar o integrador pelo Pop-Up
 @app.get("/download_conector")
 async def download_conector():
-    # Quando você gerar o arquivo .exe com aquele pyinstaller que te ensinei, 
-    # é só colocar ele na mesma pasta do servidor e a gente troca esse alert para o link do arquivo (ex: return FileResponse("conector.exe"))
-    return HTMLResponse("<script>alert('Aviso do Desenvolvedor: Gere o arquivo .exe no seu PC com o código do integrador e coloque no servidor para o cliente baixar!'); window.history.back();</script>")
+    # Isso faz o navegador do cliente iniciar o download do arquivo automaticamente!
+    return FileResponse(path="conector.exe", filename="conector_brahma.exe", media_type="application/octet-stream")

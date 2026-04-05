@@ -49,7 +49,6 @@ try:
                 conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 100) ON CONFLICT (nome) DO NOTHING"), {"n": n, "c": cat, "p": p})
 except Exception: pass
 
-# --- AQUI ESTÁ O CSS TURBINADO COM DESIGN RESPONSIVO PARA MOBILE ---
 CSS = """
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
@@ -191,12 +190,24 @@ async def login_page():
         if ('serviceWorker' in navigator) {{
             navigator.serviceWorker.register('/sw.js');
         }}
+        
+        // Verifica se é iPhone/iPad/iOS
+        const isIos = () => {{
+            const userAgent = window.navigator.userAgent.toLowerCase();
+            return /iphone|ipad|ipod/.test(userAgent);
+        }};
+        
+        // Verifica se já está instalado (rodando como app na tela inicial)
+        const isInStandaloneMode = () => ('standalone' in window.navigator) && (window.navigator.standalone);
+
         let promptInstalacao;
         window.addEventListener('beforeinstallprompt', (e) => {{
             e.preventDefault();
             promptInstalacao = e;
+            // Se for Android e não tiver instalado, mostra o botão amarelo
             document.getElementById('btn-instalar').style.display = 'block';
         }});
+        
         function instalarApp() {{
             if (promptInstalacao) {{
                 promptInstalacao.prompt();
@@ -208,6 +219,14 @@ async def login_page():
                 }});
             }}
         }}
+
+        // Roda isso assim que a página carrega
+        window.onload = function() {{
+            // Se for iOS e AINDA NÃO estiver instalado, mostra a dica
+            if (isIos() && !isInStandaloneMode()) {{
+                document.getElementById('ios-dica').style.display = 'block';
+            }}
+        }};
     </script>
     </head><body><div class='container-center'><div class='card-center'>
         {IMG_LOGO}
@@ -217,9 +236,17 @@ async def login_page():
             <input class='input-padrao' name='pw' type='password' placeholder='Senha' required>
             <button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button>
         </form>
+        
         <button id='btn-instalar' class='btn-acao' style='display:none; background:#ffc107; color:black; margin-top:15px; font-size:16px;' onclick='instalarApp()'>
             📱 INSTALAR APLICATIVO
         </button>
+        
+        <div id='ios-dica' style='display:none; background:#333; color:white; padding:15px; border-radius:8px; margin-top:15px; font-size:13px; text-align:left;'>
+            🍎 <b>Para instalar no iPhone:</b><br><br>
+            1. Toque no ícone de <b>Compartilhar</b> (o quadrado com a setinha pra cima na barra do navegador).<br>
+            2. Role a lista e selecione <b>"Adicionar à Tela de Início"</b>.
+        </div>
+        
     </div></div></body></html>"""
     return html_login
 

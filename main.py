@@ -41,7 +41,7 @@ for mig in MIGRACOES:
         with engine.begin() as conn: conn.execute(text(mig))
     except Exception: pass
 
-# Insere os produtos originais APENAS se eles não existirem (não apaga os seus novos!)
+# Insere os produtos originais APENAS se eles não existirem
 try:
     with engine.begin() as conn:
         for cat, itens in MENU_INICIAL.items():
@@ -49,14 +49,18 @@ try:
                 conn.execute(text("INSERT INTO produtos (nome, categoria, preco, estoque) VALUES (:n, :c, :p, 100) ON CONFLICT (nome) DO NOTHING"), {"n": n, "c": cat, "p": p})
 except Exception: pass
 
+# --- AQUI ESTÁ O CSS TURBINADO COM DESIGN RESPONSIVO PARA MOBILE ---
 CSS = """
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
     * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
     body { margin: 0; background: #0a3a7a; color: white; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    
     .layout-vendas { display: flex; flex: 1; height: 100vh; }
     .menu-lateral { width: 220px; padding: 20px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid rgba(255,255,255,0.1); background: #082d5e; overflow-y:auto; }
     .btn-menu { background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 15px; cursor: pointer; text-decoration: none; display: flex; justify-content: space-between; }
     .btn-menu:hover, .btn-menu.ativo { background: #d31a21; border-color: white; }
+    
     .main-area { flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; }
     
     .logo-central { width: 140px; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }
@@ -71,23 +75,25 @@ CSS = """
     .prod-card b { font-size: 14px; margin-bottom: 8px; text-shadow: 1px 1px 2px rgba(0,0,0,0.6); }
     .prod-card span { font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 5px; }
     .badge-estoque { font-size: 12px; margin-top: 8px; background: rgba(0,0,0,0.4); border-radius: 4px; padding: 3px; font-weight: bold; }
+    
     .comanda-lateral { width: 340px; background: white; color: black; border-left: 5px solid #d31a21; display: flex; flex-direction: column; }
     .comanda-header { background: #d31a21; color: white; padding: 15px; font-weight: bold; text-align: center; font-size: 18px; }
     .comanda-body { flex: 1; overflow-y: auto; padding: 15px; background: #f9f9f9; }
     .secao-titulo { font-size: 12px; color: #666; text-transform: uppercase; font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 10px; padding-bottom: 5px; }
     .item-linha { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; border-bottom: 1px dashed #ddd; padding-bottom: 5px; }
     .comanda-footer { padding: 15px; background: white; border-top: 1px solid #ccc; }
+    
     .btn-acao { display: block; width: 100%; padding: 15px; margin-bottom: 8px; border: none; border-radius: 5px; font-weight: bold; color: white; cursor: pointer; text-align: center; text-decoration: none; font-size: 14px; background: #062b5e; }
     .btn-acao:hover { background: #0d4b9c; }
+    
     .container-center { display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; overflow-y: auto; }
     .card-center { background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 650px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); margin: auto; }
     .input-padrao { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
+    
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
     
-    /* ========================================================
-       CUPOM TÉRMICO PROFISSIONAL (PADRÃO BAR DO CUSCUZ/EPSON) 
-       ======================================================== */
+    /* LAYOUT TÉRMICO DEFINITIVO (Padrão Bar do Cuscuz/EPSON) */
     .cupom-bg { background: #555; min-height: 100vh; display: flex; align-items: flex-start; justify-content: center; padding: 20px; margin: 0; font-family: 'Courier New', Courier, monospace; color: black; }
     .cupom { width: 300px; font-size: 13px; font-weight: bold; background: white; color: black; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); text-transform: uppercase; }
     .cupom-head { text-align: center; margin-bottom: 5px; font-size: 13px; line-height: 1.3; }
@@ -107,6 +113,29 @@ CSS = """
         .cupom { width: 100% !important; max-width: 100%; border: none !important; box-shadow: none !important; margin: 0 !important; padding: 0 5px !important; }
         .no-print { display: none !important; }
         * { color: black !important; background: transparent !important; }
+    }
+
+    /* MÁGICA DO MOBILE (CELULARES E TABLETS MENORES) */
+    @media (max-width: 768px) {
+        body { height: auto; overflow: auto; }
+        .layout-vendas { display: flex; flex-direction: column; height: auto; min-height: 100vh; }
+        
+        /* Menu lateral vira um carrossel no topo */
+        .menu-lateral { width: 100%; flex-direction: row; overflow-x: auto; padding: 10px; border-right: none; border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; gap: 8px; flex-shrink: 0; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+        .btn-menu { padding: 10px 15px; font-size: 14px; text-align: center; flex: 0 0 auto; justify-content: center; }
+        
+        /* Área Principal de Produtos */
+        .main-area { display: flex; overflow: visible; padding: 15px; flex-shrink: 0; }
+        .grid-produtos { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+        .prod-card { min-height: 110px; padding: 10px; }
+        .prod-card b { font-size: 13px; }
+        .prod-card span { font-size: 14px; }
+        
+        /* A Comanda vai para o final da tela inteira */
+        .comanda-lateral { width: 100%; display: flex; border-left: none; border-top: 5px solid #d31a21; flex-shrink: 0; }
+        
+        /* Telas centrais ajustadas (Buscar, Caixa, Estoque) */
+        .card-center { width: 95%; padding: 20px; }
     }
 </style>
 """
@@ -330,7 +359,7 @@ async def vendas(cat: str = "CHOPP", p: str = ""):
         function render(){{
             let html = ""; let t = 0; if(!p_num) return;
             cart.forEach((i, idx) => {{ 
-                html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black; font-size:16px; margin-left:8px;'>X</b></span></div>`; 
+                html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black; font-size:16px; margin-left:8px; padding: 5px;'>X</b></span></div>`; 
                 t += i.v; 
             }});
             document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = "R$ " + t.toFixed(2);
@@ -388,7 +417,6 @@ async def lancar_pedido(request: Request):
                 conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor, status) VALUES (:p, :n, :v, 'ABERTA')"), {"p": p, "n": i['n'], "v": i['v']})
                 conn.execute(text("UPDATE produtos SET estoque = GREATEST(COALESCE(estoque, 0) - 1, 0) WHERE nome = :n"), {"n": i['n']})
                 
-                # Monta as linhas da tabela em HTML no formato (Nome em cima, QtdxVal em baixo)
                 linhas_cupom += f"<tr><td colspan='2'>{i['n']}</td></tr>"
                 linhas_cupom += f"<tr><td>1 x {float(i['v']):.2f}</td><td class='text-right'>{float(i['v']):.2f}</td></tr>"
     except Exception: pass
@@ -437,7 +465,7 @@ async def fechar_conta(q: str = ""):
                         <div class='item-linha' style='color:#062b5e;'>
                             <span style='padding-top:5px;'>Desconto (R$):</span>
                             <div style='display:flex; gap:5px;'>
-                                <input type='number' id='input_desconto' value='0' min='0' step='0.01' style='width:70px; text-align:right; border:1px solid #ccc; border-radius:3px; padding:5px;' placeholder='0.00'>
+                                <input type='number' id='input_desconto' value='0' min='0' step='0.01' style='width:80px; text-align:right; border:1px solid #ccc; border-radius:3px; padding:5px;' placeholder='0.00'>
                                 <button type='button' onclick='calcDiv()' style='background:#062b5e; color:white; border:none; border-radius:3px; padding:5px 10px; cursor:pointer; font-weight:bold;'>APLICAR</button>
                             </div>
                         </div>
@@ -518,7 +546,6 @@ async def confirmar_fechamento(request: Request):
         linhas_cupom = ""
         for i in itens_q: 
             v_unit = float(i.tot) / i.qtd if i.qtd > 0 else 0
-            # Adiciona Nome do item numa linha e os valores embaixo (padrao bobina)
             linhas_cupom += f"<tr><td colspan='2'>{i.item_nome}</td></tr>"
             linhas_cupom += f"<tr><td>{i.qtd} x {v_unit:.2f}</td><td class='text-right'>{float(i.tot or 0):.2f}</td></tr>"
         

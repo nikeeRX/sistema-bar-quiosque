@@ -441,17 +441,14 @@ async def abrir(request: Request):
     cpf, p = form.get("cpf", "").strip(), form.get("p", "").strip()
     try:
         with engine.begin() as conn:
-            if conn.execute(text("SELECT numero_pulseira FROM pulseiras WHERE cliente_cpf = :c AND status = 'ABERTA'"), {"c": cpf}).fetchone(): return HTMLResponse(f"<script>alert('Cliente já possui comanda!'); window.history.back();</script>")
+            ja_tem = conn.execute(text("SELECT numero_pulseira FROM pulseiras WHERE cliente_cpf = :c AND status = 'ABERTA'"), {"c": cpf}).fetchone()
+            if ja_tem: return HTMLResponse(f"<script>alert('Ops! Este cliente já possui a comanda aberta de número: {ja_tem.numero_pulseira}!'); window.history.back();</script>")
+            
             if conn.execute(text("SELECT cliente_cpf FROM pulseiras WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p}).fetchone(): return HTMLResponse(f"<script>alert('A pulseira {p} já está em uso!'); window.history.back();</script>")
+            
             conn.execute(text("INSERT INTO pulseiras (numero_pulseira, cliente_cpf, total_conta, status) VALUES (:p, :c, 7.00, 'ABERTA')"), {"p": p, "c": cpf})
     except Exception: pass
     return RedirectResponse(url=f"/vendas?p={p}", status_code=303)
-
-@app.get("/cadastro", response_class=HTMLResponse)
-async def tela_cadastro(request: Request):
-    if not request.session.get("role"): return RedirectResponse(url="/")
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Novo Cliente</h2><form action='/salvar' method='post'><input class='input-padrao' name='nome' placeholder='Nome Completo' required><input class='input-padrao' name='cpf' placeholder='CPF' required><input class='input-padrao' name='nasc' type='date' required><input class='input-padrao' name='contato' placeholder='WhatsApp' required><input class='input-padrao' name='email' type='email' placeholder='E-mail (Opcional)'><input class='input-padrao' name='pulseira' placeholder='Nº Pulseira' required><button class='btn-acao' style='background:#d31a21'>SALVAR E ABRIR</button></form><br><a href='/central'>Voltar</a></div></div></body></html>"
-
 @app.post("/salvar")
 async def salvar(request: Request):
     if not request.session.get("role"): return RedirectResponse(url="/")
@@ -460,12 +457,15 @@ async def salvar(request: Request):
     try:
         with engine.begin() as conn:
             conn.execute(text("INSERT INTO clientes (nome_completo, cpf, data_nascimento, contato, email) VALUES (:n, :c, :d, :co, :e) ON CONFLICT (cpf) DO NOTHING"), {"n":n, "c":c, "d":d, "co":co, "e":e})
-            if conn.execute(text("SELECT numero_pulseira FROM pulseiras WHERE cliente_cpf = :c AND status = 'ABERTA'"), {"c": c}).fetchone(): return HTMLResponse("<script>alert('Cliente já possui comanda aberta!'); window.history.back();</script>")
-            if conn.execute(text("SELECT cliente_cpf FROM pulseiras WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p}).fetchone(): return HTMLResponse(f"<script>alert('Pulseira {p} em uso!'); window.history.back();</script>")
+            
+            ja_tem = conn.execute(text("SELECT numero_pulseira FROM pulseiras WHERE cliente_cpf = :c AND status = 'ABERTA'"), {"c": c}).fetchone()
+            if ja_tem: return HTMLResponse(f"<script>alert('Ops! Este cliente já possui a comanda aberta de número: {ja_tem.numero_pulseira}!'); window.history.back();</script>")
+            
+            if conn.execute(text("SELECT cliente_cpf FROM pulseiras WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p}).fetchone(): return HTMLResponse(f"<script>alert('A pulseira {p} já está em uso por outra pessoa!'); window.history.back();</script>")
+            
             conn.execute(text("INSERT INTO pulseiras (numero_pulseira, cliente_cpf, total_conta, status) VALUES (:p, :c, 7.00, 'ABERTA')"), {"p":p, "c":c})
     except Exception: pass
     return RedirectResponse(url=f"/vendas?p={p}", status_code=303)
-
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str = "", prod: str = ""):
     if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")

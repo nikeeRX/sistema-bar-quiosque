@@ -34,7 +34,11 @@ MIGRACOES = [
     "ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;",
     "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'OUTROS';",
     "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco DECIMAL(10,2) DEFAULT 0.00;",
-    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque INT DEFAULT 0;"
+    "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque INT DEFAULT 0;",
+    "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS garcom TEXT;",
+    "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS produto_id INT;",
+    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS forma_pagamento TEXT;",
+    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS data_fechamento TIMESTAMP;"
 ]
 for mig in MIGRACOES:
     try:
@@ -274,6 +278,7 @@ async def central(request: Request):
     popup_admin = ""
     
     if user == "admin":
+        botoes_menu += "<a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DEMONSTRATIVO DE GESTÃO</a>"
         botoes_menu += "<a href='/estoque' class='btn-acao' style='background:#e67e22'>📦 GESTÃO DE ESTOQUE</a>"
         botoes_menu += "<a href='#' class='btn-acao' style='background:#062b5e' onclick='abrirPopupImpressora()'>⚙️ CONECTAR IMPRESSORA</a>"
         
@@ -929,6 +934,98 @@ async def salvar(request: Request):
             conn.execute(text("INSERT INTO pulseiras (numero_pulseira, cliente_cpf, total_conta, status) VALUES (:p, :c, 7.00, 'ABERTA')"), {"p":pulseira, "c":cpf})
     except Exception: pass
     return RedirectResponse(url=f"/vendas?p={pulseira}", status_code=303)
+    
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request, garcom_filtro: str = None, busca_prod: str = None):
+    if request.session.get("user") != "admin": return RedirectResponse(url="/central")
+    
+    with engine.connect() as conn:
+        # 1. KPIs de Faturamento
+        kpi = conn.execute(text("SELECT SUM(total_conta) as total, COUNT(*) as qtd, AVG(total_conta) as media FROM pulseiras WHERE status = 'FECHADA'")).fetchone()
+        faturamento_total = float(kpi.total or 0)
+        total_comandas = int(kpi.qtd or 0)
+        ticket_medio = float(kpi.media or 0)
+
+        # 2. Top 5 Produtos
+        top_prods = conn.execute(text("SELECT item_nome, COUNT(*) as qtd FROM vendas_itens GROUP BY item_nome ORDER BY qtd DESC LIMIT 5")).fetchall()
+        labels_prod = [r.item_nome for r in top_prods]
+        data_prod = [r.qtd for r in top_prods]
+
+        # 3. Formas de Pagamento
+        pagamentos = conn.execute(text("SELECT forma_pagamento, COUNT(*) as qtd FROM pulseiras WHERE status = 'FECHADA' GROUP BY forma_pagamento")).fetchall()
+        labels_pag = [r.forma_pagamento or "N/D" for r in pagamentos]
+        data_pag = [r.qtd for r in pagamentos]
+
+        # 4. Performance por Garçom
+        garçons = conn.execute(text("SELECT garcom, SUM(valor) as total FROM vendas_itens GROUP BY garcom")).fetchall()
+        
+    # CSS específico para o Dashboard (Estilo Dashboard moderno)
+    dash_css = """
+    <style>
+        .grid-dash { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; width: 100%; max-width: 1100px; margin-bottom: 30px; }
+        .card-kpi { background: white; padding: 20px; border-radius: 10px; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid #d31a21; }
+        .card-kpi h3 { margin: 0; font-size: 14px; color: #666; text-transform: uppercase; }
+        .card-kpi p { margin: 10px 0 0; font-size: 24px; font-weight: bold; color: #0a3a7a; }
+        .chart-container { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; width: 100%; max-width: 530px; display: inline-block; vertical-align: top; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    """
+
+    return f"""
+    <html>
+    <head>{CSS}{dash_css}</head>
+    <body>
+        <div class='main-area' style='padding: 30px; overflow-y: auto;'>
+            <h1 style='color:white;'>📊 Demonstrativo de Gestão</h1>
+            
+            <div class='grid-dash'>
+                <div class='card-kpi'><h3>Faturamento Bruto</h3><p>R$ {faturamento_total:.2f}</p></div>
+                <div class='card-kpi'><h3>Ticket Médio</h3><p>R$ {ticket_medio:.2f}</p></div>
+                <div class='card-kpi'><h3>Comandas Fechadas</h3><p>{total_comandas}</p></div>
+            </div>
+
+            <div style='width: 100%; max-width: 1100px;'>
+                <div class='chart-container'>
+                    <h3 style='color:#333'>💰 Meios de Pagamento</h3>
+                    <canvas id="chartPag"></canvas>
+                </div>
+                <div class='chart-container'>
+                    <h3 style='color:#333'>🔝 Top 5 Produtos</h3>
+                    <canvas id="chartProd"></canvas>
+                </div>
+            </div>
+
+            <div class='card-center' style='max-width: 1100px; text-align: left;'>
+                <h3 style='color:black'>👨‍🍳 Performance por Garçom</h3>
+                <table>
+                    <tr style='color:black'><th>Garçom</th><th>Total Vendido</th></tr>
+                    {"".join([f"<tr><td style='color:black'>{g.garcom or 'Não Identificado'}</td><td style='color:black'>R$ {float(g.total):.2f}</td></tr>" for g in garçons])}
+                </table>
+            </div>
+
+            <br><a href='/central' class='btn-menu' style='width: 200px; text-align:center;'>Voltar ao Início</a>
+        </div>
+
+        <script>
+            new Chart(document.getElementById('chartPag'), {{
+                type: 'doughnut',
+                data: {{
+                    labels: {json.dumps(labels_pag)},
+                    datasets: [{{ data: {json.dumps(data_pag)}, backgroundColor: ['#0a3a7a', '#d31a21', '#ffc107', '#28a745'] }}]
+                }}
+            }});
+
+            new Chart(document.getElementById('chartProd'), {{
+                type: 'bar',
+                data: {{
+                    labels: {json.dumps(labels_prod)},
+                    datasets: [{{ label: 'Vendas', data: {json.dumps(data_prod)}, backgroundColor: '#d31a21' }}]
+                }}
+            }});
+        </script>
+    </body>
+    </html>
+    """
 
 @app.get("/logout")
 async def logout(request: Request):

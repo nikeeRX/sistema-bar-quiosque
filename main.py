@@ -130,13 +130,18 @@ async def login_page(): return f"""<html><head>{CSS}<link rel="manifest" href="/
 @app.post("/login")
 async def login(request: Request):
     f = await request.form()
-    u, p = f.get("user", ""), f.get("pw", "")
+    
+    # 🚀 A CORREÇÃO TÁ AQUI: Forçando a leitura em minúsculo e tirando espaços!
+    u = f.get("user", "").strip().lower() 
+    p = f.get("pw", "")
+    
     with engine.connect() as conn:
         user = conn.execute(text("SELECT username, role FROM usuarios WHERE username = :u AND password = :p"), {"u": u, "p": p}).fetchone()
         if user:
             request.session["user"] = user.username
             request.session["role"] = user.role
             return RedirectResponse(url="/central", status_code=303)
+            
     return HTMLResponse("<script>alert('Usuário ou Senha incorretos!'); window.location.href='/';</script>")
 
 @app.get("/central", response_class=HTMLResponse)

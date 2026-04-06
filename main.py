@@ -30,7 +30,7 @@ with engine.begin() as conn:
         CREATE TABLE IF NOT EXISTS usuarios (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL);
     """))
 
-# --- AS MIGRAÇÕES COMPLETAS AQUI (INCLUINDO AS DATAS) ---
+# --- MIGRAÇÕES COMPLETAS (COM DATAS PARA O DASHBOARD) ---
 MIGRACOES = [
     "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
     "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
@@ -121,13 +121,16 @@ IMG_LOGO = """<div style='display:flex; justify-content:center; margin-bottom:20
 IMG_LOGO_PEQ = """<div style='display:flex; justify-content:center; margin-bottom:15px;'><img src='https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png' class='logo-peq' style='margin:0;' onerror='this.style.display="none"; document.getElementById("fb-logo-peq").style.display="flex";'><div id='fb-logo-peq' class='logo-css' style='display:none; width:90px; height:90px;'><span style='font-size:12px; font-style:italic;'>CHOPP</span><span style='font-size:16px;'>BRAHMA</span></div></div>"""
 
 @app.get("/sw.js")
-async def get_sw(): return Response(content="self.addEventListener('install', e => { self.skipWaiting(); }); self.addEventListener('activate', e => { e.waitUntil(clients.claim()); }); self.addEventListener('fetch', e => {});", media_type="application/javascript")
+async def get_sw(): 
+    return Response(content="self.addEventListener('install', e => { self.skipWaiting(); }); self.addEventListener('activate', e => { e.waitUntil(clients.claim()); }); self.addEventListener('fetch', e => {});", media_type="application/javascript")
 
 @app.get("/manifest.json")
-async def get_manifest(): return {"name": "Quiosque Brahma", "short_name": "BrahmaApp", "start_url": "/", "display": "standalone", "background_color": "#0a3a7a", "theme_color": "#d31a21", "icons": [{"src": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}]}
+async def get_manifest(): 
+    return {"name": "Quiosque Brahma", "short_name": "BrahmaApp", "start_url": "/", "display": "standalone", "background_color": "#0a3a7a", "theme_color": "#d31a21", "icons": [{"src": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}]}
 
 @app.get("/", response_class=HTMLResponse)
-async def login_page(): return f"""<html><head>{CSS}<link rel="manifest" href="/manifest.json"></head><body><div class='container-center'><div class='card-center'>{IMG_LOGO}<h2>Acesso ao Sistema</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form></div></div></body></html>"""
+async def login_page(): 
+    return f"""<html><head>{CSS}<link rel="manifest" href="/manifest.json"></head><body><div class='container-center'><div class='card-center'>{IMG_LOGO}<h2>Acesso ao Sistema</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form></div></div></body></html>"""
 
 @app.post("/login")
 async def login(request: Request):
@@ -300,7 +303,8 @@ async def lancar_pedido(request: Request):
 
 @app.get("/fechar_conta", response_class=HTMLResponse)
 async def fechar_conta(request: Request, q: str = ""):
-    if request.session.get("role") not in ["admin", "gerente", "garcom", "caixa"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "gerente", "garcom", "caixa"]: 
+        return RedirectResponse(url="/central")
     res = ""
     if q:
         q = q.strip()
@@ -312,8 +316,10 @@ async def fechar_conta(request: Request, q: str = ""):
                 subtotal, taxa = float(query.total_conta or 0), float(query.total_conta or 0) * 0.10
                 total_final = subtotal + taxa
                 res = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; color:#333; margin-top:20px; text-align:left;'><h3 style='text-align:center; margin-bottom:5px;'>{query.nome_completo}</h3><p style='text-align:center; margin-top:0; font-weight:bold'>Pulseira: {query.numero_pulseira}</p><div style='background:white; padding:15px; border-radius:8px; max-height:220px; overflow-y:auto; border:1px solid #ddd;'>{lista}</div><div style='padding-top:15px; font-size:16px;'><div class='item-linha'><span>Subtotal Consumo:</span><span>R$ {subtotal:.2f}</span></div><div class='item-linha'><span>Taxa Serviço (10%):</span><span>R$ {taxa:.2f}</span></div><div class='item-linha' style='color:#062b5e;'><span style='padding-top:5px;'>Desconto (R$):</span><div style='display:flex; gap:5px;'><input type='number' id='input_desconto' value='0' min='0' step='0.01' style='width:70px; text-align:right; border:1px solid #ccc; border-radius:3px; padding:5px;' placeholder='0.00'><button type='button' onclick='calcDiv()' style='background:#062b5e; color:white; border:none; border-radius:3px; padding:5px 10px; cursor:pointer; font-weight:bold;'>APLICAR</button></div></div><div class='item-linha' style='font-weight:bold; font-size:20px; color:#d31a21; margin-top:10px;'><span>TOTAL A PAGAR:</span><span id='tot_final'>R$ {total_final:.2f}</span></div><div class='item-linha' style='margin-top:10px;'><span>Dividir por:</span><input type='number' id='divisores' value='1' min='1' style='width:60px; text-align:center; border:1px solid #ccc; border-radius:3px; font-weight:bold; padding:5px;' oninput='calcDiv()'></div><div class='item-linha' style='font-weight:bold; font-size:18px;'><span>Por Pessoa:</span><span id='val_pessoa'>R$ {total_final:.2f}</span></div><div class='item-linha' style='margin-top:15px; align-items:center;'><span style='font-weight:bold;'>Pagamento:</span><select id='select_pag' class='input-padrao' style='width:auto; padding:5px; margin:0;' onchange='document.getElementById("input_pag_form").value = this.value'><option value='DINHEIRO'>DINHEIRO</option><option value='PIX'>PIX</option><option value='C. CREDITO'>C. CREDITO</option><option value='C. DEBITO'>C. DEBITO</option></select></div></div><form action='/confirmar_fechamento' method='post'><input type='hidden' name='p' value='{query.numero_pulseira}'><input type='hidden' name='divisao' id='input_div' value='1'><input type='hidden' name='desconto' id='input_desc_form' value='0'><input type='hidden' name='pagamento' id='input_pag_form' value='DINHEIRO'><button class='btn-acao' style='background:#28a745; font-size:18px; margin-top:15px;'>🖨️ CONFIRMAR E IMPRIMIR RECIBO</button></form><script>function calcDiv() {{ let subtotal = {subtotal}; let taxa = {taxa}; let descInput = document.getElementById('input_desconto').value.replace(',', '.'); let desc = parseFloat(descInput) || 0; let div = parseInt(document.getElementById('divisores').value) || 1; let totFinal = subtotal + taxa - desc; if (totFinal < 0) totFinal = 0; document.getElementById('tot_final').innerText = 'R$ ' + totFinal.toFixed(2); document.getElementById('val_pessoa').innerText = 'R$ ' + (totFinal / div).toFixed(2); document.getElementById('input_div').value = div; document.getElementById('input_desc_form').value = desc; }}</script></div>"""
-                else: res = "<p style='color:red;'>Nenhuma comanda aberta localizada.</p>"
-        return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Fechar Conta</h2><form method='get'><input class='input-padrao' name='q' placeholder='CPF ou Nº Pulseira' value='{q}' required><button class='btn-acao'>CONSULTAR CONTA</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
+            else:
+                res = "<p style='color:red;'>Nenhuma comanda aberta localizada.</p>"
+                
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Fechar Conta</h2><form method='get'><input class='input-padrao' name='q' placeholder='CPF ou Nº Pulseira' value='{q}' required><button class='btn-acao'>CONSULTAR CONTA</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
 
 @app.post("/confirmar_fechamento")
 async def confirmar_fechamento(request: Request):

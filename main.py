@@ -63,7 +63,7 @@ def formata_linha(esq, dir, width=32):
     esq_str = str(esq)[:width - len(dir_str) - 1]
     return esq_str + " " * (width - len(esq_str) - len(dir_str)) + dir_str
 
-# --- CSS E DESIGN ATUALIZADO PARA MOBILE ---
+# --- CSS E DESIGN ATUALIZADO ---
 CSS = """
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -103,7 +103,6 @@ CSS = """
     table { width: 100%; border-collapse: collapse; margin-top: 15px; }
     th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
     
-    /* FIX PARA DASHBOARD NO CELULAR */
     @media (max-width: 768px) {
         body { height: auto; overflow: auto; }
         .layout-vendas { display: flex; flex-direction: column; height: auto; min-height: 100vh; }
@@ -177,12 +176,8 @@ async def central(request: Request):
 @app.get("/comissoes", response_class=HTMLResponse)
 async def tela_comissoes(request: Request, garcom_filtro: str = ""):
     if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
-    
     linhas_pendentes, linhas_pagas = "", ""
-    opcoes_garcom = ""
-    
     with engine.connect() as conn:
-        # Busca os nomes de quem tem venda
         garcons_db = conn.execute(text("SELECT DISTINCT garcom FROM vendas_itens WHERE garcom IS NOT NULL ORDER BY garcom")).fetchall()
         opcoes_garcom = "".join([f"<option value='{g.garcom}' {'selected' if garcom_filtro == g.garcom else ''}>{g.garcom}</option>" for g in garcons_db])
         
@@ -192,32 +187,19 @@ async def tela_comissoes(request: Request, garcom_filtro: str = ""):
             where_clause += " AND garcom = :g"
             params["g"] = garcom_filtro
             
-        # PENDENTES
-        query_pend = f"SELECT CAST(data_venda AS DATE) as data, garcom, SUM(valor) as total_vendido, (SUM(valor) * 0.10) as comissao FROM vendas_itens WHERE {where_clause} GROUP BY CAST(data_venda AS DATE), garcom ORDER BY data DESC"
-        res_pend = conn.execute(text(query_pend), params).fetchall()
+        res_pend = conn.execute(text(f"SELECT CAST(data_venda AS DATE) as data, garcom, SUM(valor) as total_vendido, (SUM(valor) * 0.10) as comissao FROM vendas_itens WHERE {where_clause} GROUP BY CAST(data_venda AS DATE), garcom ORDER BY data DESC"), params).fetchall()
         for r in res_pend:
             data_formatada = r.data.strftime("%d/%m/%Y")
             acoes = f"<form action='/pagar_comissao' method='post' style='margin:0;' onsubmit='return confirm(\"Confirmar pagamento da comissão de {r.garcom} (R$ {r.comissao:.2f}) do dia {data_formatada}?\");'><input type='hidden' name='data_venda' value='{r.data}'><input type='hidden' name='garcom' value='{r.garcom}'><button class='btn-acao' style='background:#28a745; margin:0; padding:8px; width:auto; font-size:12px;'>✔️ MARCAR COMO PAGO</button></form>"
             linhas_pendentes += f"<tr><td style='color:black; font-weight:bold;'>{r.garcom}</td><td style='color:#062b5e;'>{data_formatada}</td><td style='color:black;'>R$ {float(r.total_vendido):.2f}</td><td style='color:#d31a21; font-weight:bold;'>R$ {float(r.comissao):.2f}</td><td>{acoes}</td></tr>"
 
-        # PAGAS (Histórico)
         where_clause_pagas = "status = 'FECHADA' AND comissao_status = 'PAGA'"
         if garcom_filtro: where_clause_pagas += " AND garcom = :g"
-        query_pagas = f"SELECT CAST(data_venda AS DATE) as data, garcom, SUM(valor) as total_vendido, (SUM(valor) * 0.10) as comissao FROM vendas_itens WHERE {where_clause_pagas} GROUP BY CAST(data_venda AS DATE), garcom ORDER BY data DESC LIMIT 30"
-        res_pagas = conn.execute(text(query_pagas), params).fetchall()
+        res_pagas = conn.execute(text(f"SELECT CAST(data_venda AS DATE) as data, garcom, SUM(valor) as total_vendido, (SUM(valor) * 0.10) as comissao FROM vendas_itens WHERE {where_clause_pagas} GROUP BY CAST(data_venda AS DATE), garcom ORDER BY data DESC LIMIT 30"), params).fetchall()
         for r in res_pagas:
             linhas_pagas += f"<tr><td style='color:black; font-weight:bold;'>{r.garcom}</td><td style='color:#062b5e;'>{r.data.strftime('%d/%m/%Y')}</td><td style='color:black;'>R$ {float(r.total_vendido):.2f}</td><td style='color:#28a745; font-weight:bold;'>R$ {float(r.comissao):.2f}</td><td><span style='color:#28a745; font-weight:bold;'>PAGO</span></td></tr>"
 
-    return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center' style='max-width:800px;'><h2>💸 Gestão de Comissões</h2>
-    <form method='GET' style='margin-bottom:20px; display:flex; gap:10px; align-items:center;'><select name='garcom_filtro' class='input-padrao' style='flex:1;'><option value=''>Todos os Funcionários</option>{opcoes_garcom}</select><button class='btn-acao' style='background:#062b5e; margin:0; width:120px;'>FILTRAR</button></form>
-    
-    <h3 style='color:#d31a21; text-align:left; border-bottom:2px solid #ccc; padding-bottom:5px;'>🔴 Pendentes para Pagamento</h3>
-    <div style='max-height:300px; overflow-y:auto; border:1px solid #ddd; margin-bottom:20px;'><table><tr><th style='color:black'>Funcionário</th><th style='color:black'>Data</th><th style='color:black'>Total Vendido</th><th style='color:black'>Comissão (10%)</th><th style='color:black'>Ação</th></tr>{linhas_pendentes if linhas_pendentes else "<tr><td colspan='5' style='color:black; text-align:center;'>Nenhuma comissão pendente encontrada.</td></tr>"}</table></div>
-    
-    <h3 style='color:#28a745; text-align:left; border-bottom:2px solid #ccc; padding-bottom:5px;'>🟢 Histórico de Pagos</h3>
-    <div style='max-height:300px; overflow-y:auto; border:1px solid #ddd;'><table><tr><th style='color:black'>Funcionário</th><th style='color:black'>Data</th><th style='color:black'>Total Vendido</th><th style='color:black'>Comissão (10%)</th><th style='color:black'>Status</th></tr>{linhas_pagas if linhas_pagas else "<tr><td colspan='5' style='color:black; text-align:center;'>Nenhum histórico encontrado.</td></tr>"}</table></div>
-    
-    <br><a href='/central' class='btn-acao' style='width: 200px; margin:auto'>Voltar</a></div></div></body></html>"""
+    return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center' style='max-width:800px;'><h2>💸 Gestão de Comissões</h2><form method='GET' style='margin-bottom:20px; display:flex; gap:10px; align-items:center;'><select name='garcom_filtro' class='input-padrao' style='flex:1;'><option value=''>Todos os Funcionários</option>{opcoes_garcom}</select><button class='btn-acao' style='background:#062b5e; margin:0; width:120px;'>FILTRAR</button></form><h3 style='color:#d31a21; text-align:left; border-bottom:2px solid #ccc; padding-bottom:5px;'>🔴 Pendentes para Pagamento</h3><div style='max-height:300px; overflow-y:auto; border:1px solid #ddd; margin-bottom:20px;'><table><tr><th style='color:black'>Funcionário</th><th style='color:black'>Data</th><th style='color:black'>Total Vendido</th><th style='color:black'>Comissão (10%)</th><th style='color:black'>Ação</th></tr>{linhas_pendentes if linhas_pendentes else "<tr><td colspan='5' style='color:black; text-align:center;'>Nenhuma comissão pendente encontrada.</td></tr>"}</table></div><h3 style='color:#28a745; text-align:left; border-bottom:2px solid #ccc; padding-bottom:5px;'>🟢 Histórico de Pagos</h3><div style='max-height:300px; overflow-y:auto; border:1px solid #ddd;'><table><tr><th style='color:black'>Funcionário</th><th style='color:black'>Data</th><th style='color:black'>Total Vendido</th><th style='color:black'>Comissão (10%)</th><th style='color:black'>Status</th></tr>{linhas_pagas if linhas_pagas else "<tr><td colspan='5' style='color:black; text-align:center;'>Nenhum histórico encontrado.</td></tr>"}</table></div><br><a href='/central' class='btn-acao' style='width: 200px; margin:auto'>Voltar</a></div></div></body></html>"""
 
 @app.post("/pagar_comissao")
 async def pagar_comissao(request: Request):
@@ -230,8 +212,6 @@ async def pagar_comissao(request: Request):
     except: pass
     return RedirectResponse(url="/comissoes", status_code=303)
 
-
-# --- ROTAS DE USUÁRIOS E ESTOQUE CONTINUAM AQUI ---
 @app.get("/usuarios", response_class=HTMLResponse)
 async def tela_usuarios(request: Request):
     if request.session.get("role") != "admin": return RedirectResponse(url="/central")
@@ -361,7 +341,6 @@ async def lancar_pedido(request: Request):
             if not conn.execute(text("SELECT id FROM pulseiras WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p}).fetchone(): return RedirectResponse(url="/vendas", status_code=303)
             conn.execute(text("UPDATE pulseiras SET total_conta = total_conta + :t WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"t": tot, "p": p})
             for i in lista:
-                # Comissao_status entra como PENDENTE por padrão graças ao DB
                 conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor, status, garcom) VALUES (:p, :n, :v, 'ABERTA', :g)"), {"p": p, "n": i['n'], "v": i['v'], "g": usuario})
                 conn.execute(text("UPDATE produtos SET estoque = GREATEST(COALESCE(estoque, 0) - 1, 0) WHERE nome = :n"), {"n": i['n']})
             txt = "--------------------------------\n      QUIOSQUE CHOPP BRAHMA     \n   TICKET DE PREPARO DE BALCAO  \n--------------------------------\n"
@@ -443,12 +422,16 @@ async def abrir(request: Request):
         with engine.begin() as conn:
             ja_tem = conn.execute(text("SELECT numero_pulseira FROM pulseiras WHERE cliente_cpf = :c AND status = 'ABERTA'"), {"c": cpf}).fetchone()
             if ja_tem: return HTMLResponse(f"<script>alert('Ops! Este cliente já possui a comanda aberta de número: {ja_tem.numero_pulseira}!'); window.history.back();</script>")
-            
             if conn.execute(text("SELECT cliente_cpf FROM pulseiras WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p}).fetchone(): return HTMLResponse(f"<script>alert('A pulseira {p} já está em uso!'); window.history.back();</script>")
-            
             conn.execute(text("INSERT INTO pulseiras (numero_pulseira, cliente_cpf, total_conta, status) VALUES (:p, :c, 7.00, 'ABERTA')"), {"p": p, "c": cpf})
     except Exception: pass
     return RedirectResponse(url=f"/vendas?p={p}", status_code=303)
+
+@app.get("/cadastro", response_class=HTMLResponse)
+async def tela_cadastro(request: Request):
+    if not request.session.get("role"): return RedirectResponse(url="/")
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Novo Cliente</h2><form action='/salvar' method='post'><input class='input-padrao' name='nome' placeholder='Nome Completo' required><input class='input-padrao' name='cpf' placeholder='CPF' required><input class='input-padrao' name='nasc' type='date' required><input class='input-padrao' name='contato' placeholder='WhatsApp' required><input class='input-padrao' name='email' type='email' placeholder='E-mail (Opcional)'><input class='input-padrao' name='pulseira' placeholder='Nº Pulseira' required><button class='btn-acao' style='background:#d31a21'>SALVAR E ABRIR</button></form><br><a href='/central'>Voltar</a></div></div></body></html>"
+
 @app.post("/salvar")
 async def salvar(request: Request):
     if not request.session.get("role"): return RedirectResponse(url="/")
@@ -457,15 +440,13 @@ async def salvar(request: Request):
     try:
         with engine.begin() as conn:
             conn.execute(text("INSERT INTO clientes (nome_completo, cpf, data_nascimento, contato, email) VALUES (:n, :c, :d, :co, :e) ON CONFLICT (cpf) DO NOTHING"), {"n":n, "c":c, "d":d, "co":co, "e":e})
-            
             ja_tem = conn.execute(text("SELECT numero_pulseira FROM pulseiras WHERE cliente_cpf = :c AND status = 'ABERTA'"), {"c": c}).fetchone()
             if ja_tem: return HTMLResponse(f"<script>alert('Ops! Este cliente já possui a comanda aberta de número: {ja_tem.numero_pulseira}!'); window.history.back();</script>")
-            
             if conn.execute(text("SELECT cliente_cpf FROM pulseiras WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p}).fetchone(): return HTMLResponse(f"<script>alert('A pulseira {p} já está em uso por outra pessoa!'); window.history.back();</script>")
-            
             conn.execute(text("INSERT INTO pulseiras (numero_pulseira, cliente_cpf, total_conta, status) VALUES (:p, :c, 7.00, 'ABERTA')"), {"p":p, "c":c})
     except Exception: pass
     return RedirectResponse(url=f"/vendas?p={p}", status_code=303)
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str = "", prod: str = ""):
     if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
@@ -474,7 +455,6 @@ async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str 
     where_vendas = "status = 'FECHADA'"
     where_hist = "1=1"
     where_prod = "1=1"
-    
     params_p, params_v, params_h = {}, {}, {}
     
     if inicio:
@@ -518,10 +498,8 @@ async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str 
         total_comandas = int(kpi.qtd or 0)
         ticket_medio = float(kpi.media or 0)
         
-        # Busca o total de comissões PAGAS no período
         comissao_db = conn.execute(text(f"SELECT SUM(valor * 0.10) as comissao_total FROM vendas_itens WHERE {where_vendas} AND comissao_status = 'PAGA'"), params_v).fetchone()
         comissoes_pagas = float(comissao_db.comissao_total or 0)
-        
         faturamento_liquido = faturamento_bruto - comissoes_pagas
 
         pagamentos = conn.execute(text(f"SELECT forma_pagamento, COUNT(*) as qtd FROM pulseiras WHERE {where_pulseira} GROUP BY forma_pagamento"), params_p).fetchall()
@@ -539,41 +517,7 @@ async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str 
 
     dash_css = """<style>.grid-dash { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; width: 100%; max-width: 1100px; margin-bottom: 20px; } .card-kpi { background: white; padding: 20px; border-radius: 10px; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid #d31a21; } .card-kpi.estoque { border-left-color: #e67e22; } .card-kpi.liquido { border-left-color: #28a745; } .card-kpi.comissao { border-left-color: #8e44ad; } .card-kpi h3 { margin: 0; font-size: 14px; color: #666; text-transform: uppercase; } .card-kpi p { margin: 10px 0 0; font-size: 24px; font-weight: bold; color: #0a3a7a; } .chart-container { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; width: 100%; max-width: 530px; display: inline-block; vertical-align: top; } .aba-btn { background: #062b5e; color: white; border: none; padding: 15px 30px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-right: 10px; transition: 0.3s; } .aba-btn:hover { background: #d31a21; } .filtro-bar { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border: 1px solid rgba(255,255,255,0.2); }</style><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>"""
 
-    return f"""<html><head>{CSS}{dash_css}</head><body><div class='main-area' style='padding: 30px; overflow-y: auto;'><h1 style='color:white; margin-bottom: 5px;'>📊 Painel de Gestão Avançado</h1>
-    
-    <form class='filtro-bar' method='GET'>
-        <div><label style='font-size:12px;'>De:</label><br><input type='date' name='inicio' value='{inicio}' class='input-padrao' style='width:140px; margin:0;'></div>
-        <div><label style='font-size:12px;'>Até:</label><br><input type='date' name='fim' value='{fim}' class='input-padrao' style='width:140px; margin:0;'></div>
-        <div><label style='font-size:12px;'>Categoria:</label><br><select name='cat' class='input-padrao' style='width:130px; margin:0;'><option value=''>TODAS</option>{opcoes_cat}</select></div>
-        <div><label style='font-size:12px;'>Produto (Nome/Cód):</label><br><input type='text' name='prod' value='{prod}' placeholder='Ex: Heineken ou 001' class='input-padrao' style='width:150px; margin:0;'></div>
-        <div style='display:flex; align-items:flex-end;'><button class='btn-acao' style='background:#28a745; margin:0; height:45px; margin-top:17px; width:100px;'>FILTRAR</button></div>
-        <div style='display:flex; align-items:flex-end;'><a href='/dashboard' class='btn-acao' style='background:#666; margin:0; height:45px; margin-top:17px; width:100px; line-height:15px'>LIMPAR</a></div>
-    </form>
-
-    <div style='margin-bottom: 30px;'><button id='btn-fin' class='aba-btn' style='background:#17a2b8' onclick="showTab('fin')">💰 VISÃO FINANCEIRA</button><button id='btn-est' class='aba-btn' style='opacity:0.6; background:#e67e22' onclick="showTab('est')">📦 VISÃO ESTOQUE</button></div>
-    
-    <div id='tab-fin'>
-        <div class='grid-dash'>
-            <div class='card-kpi'><h3>Faturamento Bruto</h3><p>R$ {faturamento_bruto:.2f}</p></div>
-            <div class='card-kpi comissao'><h3>Comissões Pagas</h3><p style='color:#8e44ad'>R$ {comissoes_pagas:.2f}</p></div>
-            <div class='card-kpi liquido'><h3>Faturamento Líquido</h3><p style='color:#28a745'>R$ {faturamento_liquido:.2f}</p></div>
-            <div class='card-kpi'><h3>Ticket Médio</h3><p>R$ {ticket_medio:.2f}</p></div>
-        </div>
-        <div style='width: 100%; max-width: 1100px;'><div class='chart-container'><h3 style='color:#333'>💰 Meios de Pagamento</h3><canvas id="chartPag"></canvas></div><div class='chart-container'><h3 style='color:#333'>👨‍🍳 Vendas por Garçom (R$)</h3><canvas id="chartGarcom"></canvas></div></div>
-        <div class='card-center' style='max-width: 1100px; text-align: left; margin-top:20px;'><h3 style='color:black; margin-top:0'>👨‍🍳 Tabela de Performance</h3><table><tr style='color:black; border-bottom:2px solid #ccc'><th>Garçom</th><th>Total Vendido (R$)</th></tr>{"".join([f"<tr><td style='color:black'>{g.garcom or 'Não Identificado'}</td><td style='color:black; font-weight:bold'>R$ {float(g.total or 0):.2f}</td></tr>" for g in garcons])}</table></div>
-    </div>
-    
-    <div id='tab-est' style='display:none;'>
-        <div class='grid-dash'><div class='card-kpi estoque'><h3>Qtd de Entradas (Compras)</h3><p style='color:#28a745'>+{total_entradas} Itens</p></div><div class='card-kpi estoque'><h3>Qtd de Saídas (Vendas)</h3><p style='color:#d31a21'>-{total_saidas} Itens</p></div></div>
-        <div style='width: 100%; max-width: 1100px;'><div class='chart-container' style='max-width: 100%; display:block;'><h3 style='color:#333'>🔄 Comparativo Geral: Estoque Físico vs Vendidos</h3><canvas id="chartCruzamento"></canvas></div></div>
-    </div><br><a href='/central' class='btn-acao' style='width: 200px; margin:auto'>Voltar ao Início</a></div>
-    
-    <script>
-        function showTab(tab) {{ document.getElementById('tab-fin').style.display = tab === 'fin' ? 'block' : 'none'; document.getElementById('tab-est').style.display = tab === 'est' ? 'block' : 'none'; document.getElementById('btn-fin').style.opacity = tab === 'fin' ? '1' : '0.6'; document.getElementById('btn-est').style.opacity = tab === 'est' ? '1' : '0.6'; }} 
-        new Chart(document.getElementById('chartPag'), {{ type: 'doughnut', data: {{ labels: {json.dumps(labels_pag)}, datasets: [{{ data: {json.dumps(data_pag)}, backgroundColor: ['#0a3a7a', '#d31a21', '#ffc107', '#28a745'] }}] }} }}); 
-        new Chart(document.getElementById('chartGarcom'), {{ type: 'bar', data: {{ labels: {json.dumps([g.garcom or 'N/D' for g in garcons])}, datasets: [{{ label: 'Total Vendido (R$)', data: {json.dumps([float(g.total or 0) for g in garcons])}, backgroundColor: '#17a2b8' }}] }} }}); 
-        new Chart(document.getElementById('chartCruzamento'), {{ type: 'bar', data: {{ labels: {json.dumps(labels_cruz)}, datasets: [{{ label: 'Qtd Vendida no Período', data: {json.dumps(data_cruz_vendidos)}, backgroundColor: '#d31a21' }}, {{ label: 'Estoque Físico Atual', data: {json.dumps(data_cruz_estoque)}, backgroundColor: '#0a3a7a' }}] }} }});
-    </script></body></html>"""
+    return f"""<html><head>{CSS}{dash_css}</head><body><div class='main-area' style='padding: 30px; overflow-y: auto;'><h1 style='color:white; margin-bottom: 5px;'>📊 Painel de Gestão Avançado</h1><form class='filtro-bar' method='GET'><div><label style='font-size:12px;'>De:</label><br><input type='date' name='inicio' value='{inicio}' class='input-padrao' style='width:140px; margin:0;'></div><div><label style='font-size:12px;'>Até:</label><br><input type='date' name='fim' value='{fim}' class='input-padrao' style='width:140px; margin:0;'></div><div><label style='font-size:12px;'>Categoria:</label><br><select name='cat' class='input-padrao' style='width:130px; margin:0;'><option value=''>TODAS</option>{opcoes_cat}</select></div><div><label style='font-size:12px;'>Produto (Nome/Cód):</label><br><input type='text' name='prod' value='{prod}' placeholder='Ex: Heineken ou 001' class='input-padrao' style='width:150px; margin:0;'></div><div style='display:flex; align-items:flex-end;'><button class='btn-acao' style='background:#28a745; margin:0; height:45px; margin-top:17px; width:100px;'>FILTRAR</button></div><div style='display:flex; align-items:flex-end;'><a href='/dashboard' class='btn-acao' style='background:#666; margin:0; height:45px; margin-top:17px; width:100px; line-height:15px'>LIMPAR</a></div></form><div style='margin-bottom: 30px;'><button id='btn-fin' class='aba-btn' style='background:#17a2b8' onclick="showTab('fin')">💰 VISÃO FINANCEIRA</button><button id='btn-est' class='aba-btn' style='opacity:0.6; background:#e67e22' onclick="showTab('est')">📦 VISÃO ESTOQUE</button></div><div id='tab-fin'><div class='grid-dash'><div class='card-kpi'><h3>Faturamento Bruto</h3><p>R$ {faturamento_bruto:.2f}</p></div><div class='card-kpi comissao'><h3>Comissões Pagas</h3><p style='color:#8e44ad'>R$ {comissoes_pagas:.2f}</p></div><div class='card-kpi liquido'><h3>Faturamento Líquido</h3><p style='color:#28a745'>R$ {faturamento_liquido:.2f}</p></div><div class='card-kpi'><h3>Ticket Médio</h3><p>R$ {ticket_medio:.2f}</p></div></div><div style='width: 100%; max-width: 1100px;'><div class='chart-container'><h3 style='color:#333'>💰 Meios de Pagamento</h3><canvas id="chartPag"></canvas></div><div class='chart-container'><h3 style='color:#333'>👨‍🍳 Vendas por Garçom (R$)</h3><canvas id="chartGarcom"></canvas></div></div><div class='card-center' style='max-width: 1100px; text-align: left; margin-top:20px;'><h3 style='color:black; margin-top:0'>👨‍🍳 Tabela de Performance</h3><table><tr style='color:black; border-bottom:2px solid #ccc'><th>Garçom</th><th>Total Vendido (R$)</th></tr>{"".join([f"<tr><td style='color:black'>{g.garcom or 'Não Identificado'}</td><td style='color:black; font-weight:bold'>R$ {float(g.total or 0):.2f}</td></tr>" for g in garcons])}</table></div></div><div id='tab-est' style='display:none;'><div class='grid-dash'><div class='card-kpi estoque'><h3>Qtd de Entradas (Compras)</h3><p style='color:#28a745'>+{total_entradas} Itens</p></div><div class='card-kpi estoque'><h3>Qtd de Saídas (Vendas)</h3><p style='color:#d31a21'>-{total_saidas} Itens</p></div></div><div style='width: 100%; max-width: 1100px;'><div class='chart-container' style='max-width: 100%; display:block;'><h3 style='color:#333'>🔄 Comparativo Geral: Estoque Físico vs Vendidos</h3><canvas id="chartCruzamento"></canvas></div></div></div><br><a href='/central' class='btn-acao' style='width: 200px; margin:auto'>Voltar ao Início</a></div><script>function showTab(tab) {{ document.getElementById('tab-fin').style.display = tab === 'fin' ? 'block' : 'none'; document.getElementById('tab-est').style.display = tab === 'est' ? 'block' : 'none'; document.getElementById('btn-fin').style.opacity = tab === 'fin' ? '1' : '0.6'; document.getElementById('btn-est').style.opacity = tab === 'est' ? '1' : '0.6'; }} new Chart(document.getElementById('chartPag'), {{ type: 'doughnut', data: {{ labels: {json.dumps(labels_pag)}, datasets: [{{ data: {json.dumps(data_pag)}, backgroundColor: ['#0a3a7a', '#d31a21', '#ffc107', '#28a745'] }}] }} }}); new Chart(document.getElementById('chartGarcom'), {{ type: 'bar', data: {{ labels: {json.dumps([g.garcom or 'N/D' for g in garcons])}, datasets: [{{ label: 'Total Vendido (R$)', data: {json.dumps([float(g.total or 0) for g in garcons])}, backgroundColor: '#17a2b8' }}] }} }}); new Chart(document.getElementById('chartCruzamento'), {{ type: 'bar', data: {{ labels: {json.dumps(labels_cruz)}, datasets: [{{ label: 'Qtd Vendida no Período', data: {json.dumps(data_cruz_vendidos)}, backgroundColor: '#d31a21' }}, {{ label: 'Estoque Físico Atual', data: {json.dumps(data_cruz_estoque)}, backgroundColor: '#0a3a7a' }}] }} }});</script></body></html>"""
 
 @app.get("/logout")
 async def logout(request: Request):

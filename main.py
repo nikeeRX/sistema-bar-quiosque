@@ -39,7 +39,9 @@ MIGRACOES = [
     "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque INT DEFAULT 0;",
     "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS garcom TEXT;",
     "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS forma_pagamento TEXT;",
-    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS data_fechamento TIMESTAMP;"
+    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS data_fechamento TIMESTAMP;",
+    "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS data_venda DATE DEFAULT CURRENT_DATE;",
+    "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS hora_venda TIME DEFAULT CURRENT_TIME;"
 ]
 for mig in MIGRACOES:
     try:

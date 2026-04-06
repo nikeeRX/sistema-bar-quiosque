@@ -344,8 +344,8 @@ async def tela_estoque(request: Request):
             p_val = float(r.preco or 0)
             e_val = int(r.estoque or 0)
             
-            # 2. Formatamos o ID para ficar com 3 dígitos (ex: #001, #015)
-            cod_formatado = f"#{r.id:03d}"
+            # 2. Formatamos o ID para ficar com 3 dígitos puros, SEM O # (ex: 001, 015)
+            cod_formatado = f"{r.id:03d}"
             
             if cat_val != curr_cat:
                 linhas += f"<tr><td colspan='4' style='background:#082d5e; color:white; font-weight:bold; text-align:center;'>{cat_val}</td></tr>"

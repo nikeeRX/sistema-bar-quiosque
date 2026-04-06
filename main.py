@@ -350,58 +350,71 @@ async def salvar(request: Request):
 async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str = "", prod: str = ""):
     if request.session.get("user") != "admin": return RedirectResponse(url="/central")
     
-    # CONSTRUÇÃO DO FILTRO MASTER
     where_pulseira = "status = 'FECHADA'"
     where_vendas = "status = 'FECHADA'"
     where_hist = "1=1"
-    params = {}
+    where_prod = "1=1" # Controle isolado para o gráfico de cruzamento
+    
+    params_p = {}
+    params_v = {}
+    params_h = {}
     
     if inicio:
         where_pulseira += " AND DATE(data_fechamento) >= :inicio"
         where_vendas += " AND data_venda >= :inicio"
         where_hist += " AND data_entrada >= :inicio"
-        params["inicio"] = inicio
+        params_p["inicio"] = params_v["inicio"] = params_h["inicio"] = inicio
     if fim:
         where_pulseira += " AND DATE(data_fechamento) <= :fim"
         where_vendas += " AND data_venda <= :fim"
         where_hist += " AND data_entrada <= :fim"
-        params["fim"] = fim
+        params_p["fim"] = params_v["fim"] = params_h["fim"] = fim
         
     join_vendas = ""
     if cat or prod:
         join_vendas = "JOIN produtos p ON vendas_itens.item_nome = p.nome"
         if cat:
             where_vendas += " AND p.categoria = :cat"
-            params["cat"] = cat
+            where_prod += " AND p.categoria = :cat"
+            params_v["cat"] = cat
         if prod:
-            where_vendas += " AND p.nome ILIKE :prod"
-            params["prod"] = f"%{prod}%"
-            where_hist += " AND produto_nome ILIKE :prod"
+            # 🚀 A MÁGICA DA BUSCA UNIVERSAL (Nome ou Código) 🚀
+            prod_str = prod.replace("#", "").strip() # Limpa se o cara digitar "#001"
+            try:
+                prod_id = int(prod_str) # Tenta converter pra número
+                where_vendas += " AND (p.nome ILIKE :prod OR p.id = :prod_id)"
+                where_prod += " AND (p.nome ILIKE :prod OR p.id = :prod_id)"
+                where_hist += " AND produto_nome IN (SELECT nome FROM produtos WHERE nome ILIKE :prod OR id = :prod_id)"
+                params_v["prod_id"] = params_h["prod_id"] = prod_id
+            except ValueError:
+                # Se der erro na conversão, é porque ele digitou texto (ex: "Chopp")
+                where_vendas += " AND p.nome ILIKE :prod"
+                where_prod += " AND p.nome ILIKE :prod"
+                where_hist += " AND produto_nome ILIKE :prod"
+
+            params_v["prod"] = f"%{prod_str}%"
+            params_h["prod"] = f"%{prod_str}%"
 
     with engine.connect() as conn:
-        # LISTAS PARA OS DROPDOWNS DO FILTRO
         categorias_db = conn.execute(text("SELECT DISTINCT categoria FROM produtos WHERE categoria IS NOT NULL")).fetchall()
         opcoes_cat = "".join([f"<option value='{c.categoria}' {'selected' if cat == c.categoria else ''}>{c.categoria}</option>" for c in categorias_db])
 
-        # KPI FINANCEIRO
-        kpi = conn.execute(text(f"SELECT SUM(total_conta) as total, COUNT(*) as qtd, AVG(total_conta) as media FROM pulseiras WHERE {where_pulseira}"), params).fetchone()
+        kpi = conn.execute(text(f"SELECT SUM(total_conta) as total, COUNT(*) as qtd, AVG(total_conta) as media FROM pulseiras WHERE {where_pulseira}"), params_p).fetchone()
         faturamento_total, total_comandas, ticket_medio = float(kpi.total or 0), int(kpi.qtd or 0), float(kpi.media or 0)
 
-        # GRÁFICOS FINANCEIROS
-        pagamentos = conn.execute(text(f"SELECT forma_pagamento, COUNT(*) as qtd FROM pulseiras WHERE {where_pulseira} GROUP BY forma_pagamento"), params).fetchall()
+        pagamentos = conn.execute(text(f"SELECT forma_pagamento, COUNT(*) as qtd FROM pulseiras WHERE {where_pulseira} GROUP BY forma_pagamento"), params_p).fetchall()
         labels_pag, data_pag = [r.forma_pagamento or "N/D" for r in pagamentos], [r.qtd for r in pagamentos]
 
-        garcons = conn.execute(text(f"SELECT garcom, SUM(vendas_itens.valor) as total FROM vendas_itens {join_vendas} WHERE {where_vendas} GROUP BY garcom ORDER BY total DESC"), params).fetchall()
+        garcons = conn.execute(text(f"SELECT garcom, SUM(vendas_itens.valor) as total FROM vendas_itens {join_vendas} WHERE {where_vendas} GROUP BY garcom ORDER BY total DESC"), params_v).fetchall()
 
-        # KPIs ESTOQUE (ENTRADAS VS VENDAS)
-        total_vendas_db = conn.execute(text(f"SELECT COUNT(*) as total_vendido FROM vendas_itens {join_vendas} WHERE {where_vendas}"), params).fetchone()
+        total_vendas_db = conn.execute(text(f"SELECT COUNT(*) as total_vendido FROM vendas_itens {join_vendas} WHERE {where_vendas}"), params_v).fetchone()
         total_saidas = int(total_vendas_db.total_vendido or 0)
         
-        total_entradas_db = conn.execute(text(f"SELECT SUM(qtd_adicionada) as total_entrou FROM historico_estoque WHERE {where_hist}"), params).fetchone()
+        total_entradas_db = conn.execute(text(f"SELECT SUM(qtd_adicionada) as total_entrou FROM historico_estoque WHERE {where_hist}"), params_h).fetchone()
         total_entradas = int(total_entradas_db.total_entrou or 0)
 
-        # CRUZAMENTO GERAL (VENDIDOS VS ESTOQUE)
-        cruzamento = conn.execute(text(f"SELECT p.nome, p.estoque, COUNT(v.id) as vendidos FROM produtos p LEFT JOIN vendas_itens v ON p.nome = v.item_nome AND v.{where_vendas} GROUP BY p.nome, p.estoque ORDER BY vendidos DESC LIMIT 10"), params).fetchall()
+        query_cruz = f"SELECT p.nome, p.estoque, COUNT(v.id) as vendidos FROM produtos p LEFT JOIN vendas_itens v ON p.nome = v.item_nome AND v.status = 'FECHADA' {'AND v.data_venda >= :inicio' if inicio else ''} {'AND v.data_venda <= :fim' if fim else ''} WHERE {where_prod} GROUP BY p.nome, p.estoque ORDER BY vendidos DESC LIMIT 10"
+        cruzamento = conn.execute(text(query_cruz), params_v).fetchall()
         labels_cruz, data_cruz_vendidos, data_cruz_estoque = [r.nome for r in cruzamento], [r.vendidos for r in cruzamento], [r.estoque for r in cruzamento]
 
     dash_css = """<style>.grid-dash { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; width: 100%; max-width: 1100px; margin-bottom: 20px; } .card-kpi { background: white; padding: 20px; border-radius: 10px; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid #d31a21; } .card-kpi.estoque { border-left-color: #e67e22; } .card-kpi h3 { margin: 0; font-size: 14px; color: #666; text-transform: uppercase; } .card-kpi p { margin: 10px 0 0; font-size: 24px; font-weight: bold; color: #0a3a7a; } .chart-container { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; width: 100%; max-width: 530px; display: inline-block; vertical-align: top; } .aba-btn { background: #062b5e; color: white; border: none; padding: 15px 30px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-right: 10px; transition: 0.3s; } .aba-btn:hover { background: #d31a21; } .filtro-bar { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border: 1px solid rgba(255,255,255,0.2); }</style><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>"""
@@ -412,7 +425,7 @@ async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str 
         <div><label style='font-size:12px;'>De:</label><br><input type='date' name='inicio' value='{inicio}' class='input-padrao' style='width:140px; margin:0;'></div>
         <div><label style='font-size:12px;'>Até:</label><br><input type='date' name='fim' value='{fim}' class='input-padrao' style='width:140px; margin:0;'></div>
         <div><label style='font-size:12px;'>Categoria:</label><br><select name='cat' class='input-padrao' style='width:130px; margin:0;'><option value=''>TODAS</option>{opcoes_cat}</select></div>
-        <div><label style='font-size:12px;'>Produto:</label><br><input type='text' name='prod' value='{prod}' placeholder='Nome do item' class='input-padrao' style='width:150px; margin:0;'></div>
+        <div><label style='font-size:12px;'>Produto (Nome/Cód):</label><br><input type='text' name='prod' value='{prod}' placeholder='Ex: Heineken ou 001' class='input-padrao' style='width:150px; margin:0;'></div>
         <div style='display:flex; align-items:flex-end;'><button class='btn-acao' style='background:#28a745; margin:0; height:45px; margin-top:17px; width:100px;'>FILTRAR</button></div>
         <div style='display:flex; align-items:flex-end;'><a href='/dashboard' class='btn-acao' style='background:#666; margin:0; height:45px; margin-top:17px; width:100px; line-height:15px'>LIMPAR</a></div>
     </form>
@@ -434,8 +447,8 @@ async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str 
         new Chart(document.getElementById('chartPag'), {{ type: 'doughnut', data: {{ labels: {json.dumps(labels_pag)}, datasets: [{{ data: {json.dumps(data_pag)}, backgroundColor: ['#0a3a7a', '#d31a21', '#ffc107', '#28a745'] }}] }} }}); 
         new Chart(document.getElementById('chartGarcom'), {{ type: 'bar', data: {{ labels: {json.dumps([g.garcom or 'N/D' for g in garcons])}, datasets: [{{ label: 'Total Vendido (R$)', data: {json.dumps([float(g.total) for g in garcons])}, backgroundColor: '#17a2b8' }}] }} }}); 
         new Chart(document.getElementById('chartCruzamento'), {{ type: 'bar', data: {{ labels: {json.dumps(labels_cruz)}, datasets: [{{ label: 'Qtd Vendida no Período', data: {json.dumps(data_cruz_vendidos)}, backgroundColor: '#d31a21' }}, {{ label: 'Estoque Físico Atual', data: {json.dumps(data_cruz_estoque)}, backgroundColor: '#0a3a7a' }}] }} }});
-    </script></body></html>"""
-
+    </script></body></html>
+    
 @app.get("/logout")
 async def logout(request: Request):
     request.session.clear()

@@ -348,7 +348,6 @@ async def tela_estoque(request: Request):
             cod_formatado = f"#{r.id:03d}"
             
             if cat_val != curr_cat:
-                # Mudamos o colspan para 4 porque agora temos mais uma coluna
                 linhas += f"<tr><td colspan='4' style='background:#082d5e; color:white; font-weight:bold; text-align:center;'>{cat_val}</td></tr>"
                 curr_cat = cat_val
                 
@@ -366,7 +365,6 @@ async def tela_estoque(request: Request):
                 </form>
             </div>
             """
-            # 3. Adicionamos a coluna do Código Formato na linha da tabela
             linhas += f"<tr><td style='color:#d31a21; font-weight:bold;'>{cod_formatado}</td><td style='color:black; line-height:1.2;'>{r.nome} <br><small style='color:#666;'>R$ {p_val:.2f}</small></td><td style='color:black; font-weight:bold; font-size:18px;'>{e_val}</td><td>{acoes}</td></tr>"
             
     add_form = f"""
@@ -391,7 +389,7 @@ async def tela_estoque(request: Request):
     html_estoque = f"""
     <html>
     <head>
-        {{CSS}}
+        {CSS}
         <script>
             function editarProd(n_a, p_a) {{ 
                 let n_n = prompt("Novo Nome:", n_a); 
@@ -427,7 +425,6 @@ async def tela_estoque(request: Request):
     </html>
     """
     return html_estoque
-
 @app.post("/novo_produto")
 async def novo_produto(request: Request):
     if request.session.get("user") != "admin": return RedirectResponse(url="/central", status_code=303)

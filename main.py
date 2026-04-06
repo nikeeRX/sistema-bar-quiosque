@@ -153,10 +153,10 @@ async def central(request: Request):
     botoes = ""
     # Portaria, Garçom, Caixa, Gerente, Admin tem acesso:
     if role in ["admin", "gerente", "garcom", "caixa", "portaria"]:
-        botoes += f"<a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR COMANDA</a>"
+        botoes += f"<a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CLIENTE</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR NOVA PULSEIRA</a>"
     # Apenas Garçom, Caixa, Gerente, Admin tem acesso a vendas e fechamento:
     if role in ["admin", "gerente", "garcom", "caixa"]:
-        botoes += f"<a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / VENDAS</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a>"
+        botoes += f"<a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / LANÇAR ITENS</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a>"
     # Apenas Gerente e Admin tem acesso a relatórios:
     if role in ["admin", "gerente"]:
         botoes += "<a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DEMONSTRATIVO GESTÃO</a><a href='/estoque' class='btn-acao' style='background:#e67e22'>📦 GESTÃO DE ESTOQUE</a><a href='#' class='btn-acao' style='background:#062b5e' onclick='abrirPopup()'>⚙️ CONECTAR IMPRESSORA</a>"
@@ -166,7 +166,6 @@ async def central(request: Request):
         
     popup = """<div id="popup" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:999; align-items:center; justify-content:center; flex-direction:column; padding:20px;"><div style="background:white; color:black; padding:30px; border-radius:15px; max-width:400px; text-align:center; border-top: 8px solid #d31a21;"><h2 style="margin-top:0; color:#d31a21;">🖨️ Impressora</h2><p style="margin-bottom:20px;">Baixe nosso integrador para pedidos automáticos.</p><a href="/download_conector" class="btn-acao" style="background:#28a745; margin-bottom:15px;">⬇️ BAIXAR CONECTOR</a><button onclick="document.getElementById('popup').style.display='none'" style="background:transparent; border:none; color:#666; cursor:pointer; text-decoration:underline;">Fazer depois</button></div></div><script>function abrirPopup() { document.getElementById('popup').style.display = 'flex'; }</script>"""
     return f"<html><head>{CSS}</head><body>{popup if role in ['admin', 'gerente'] else ''}<div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<p style='margin-top:0;'>Logado como: <b>{user.upper()}</b></p>{botoes}<br><a href='/logout' style='color:gray'>Sair do Sistema</a></div></div></body></html>"
-
 @app.get("/usuarios", response_class=HTMLResponse)
 async def tela_usuarios(request: Request):
     if request.session.get("role") != "admin": return RedirectResponse(url="/central")
@@ -406,21 +405,27 @@ async def salvar(request: Request):
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str = "", prod: str = ""):
     if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    
     where_pulseira = "status = 'FECHADA'"
     where_vendas = "status = 'FECHADA'"
     where_hist = "1=1"
     where_prod = "1=1"
-    params_p, params_v, params_h = {}, {}, {}
+    
+    params_p = {}
+    params_v = {}
+    params_h = {}
+    
     if inicio:
-        where_pulseira += " AND DATE(data_fechamento) >= :inicio"
-        where_vendas += " AND data_venda >= :inicio"
-        where_hist += " AND data_entrada >= :inicio"
+        where_pulseira += " AND CAST(data_fechamento AS DATE) >= CAST(:inicio AS DATE)"
+        where_vendas += " AND CAST(data_venda AS DATE) >= CAST(:inicio AS DATE)"
+        where_hist += " AND CAST(data_entrada AS DATE) >= CAST(:inicio AS DATE)"
         params_p["inicio"] = params_v["inicio"] = params_h["inicio"] = inicio
     if fim:
-        where_pulseira += " AND DATE(data_fechamento) <= :fim"
-        where_vendas += " AND data_venda <= :fim"
-        where_hist += " AND data_entrada <= :fim"
+        where_pulseira += " AND CAST(data_fechamento AS DATE) <= CAST(:fim AS DATE)"
+        where_vendas += " AND CAST(data_venda AS DATE) <= CAST(:fim AS DATE)"
+        where_hist += " AND CAST(data_entrada AS DATE) <= CAST(:fim AS DATE)"
         params_p["fim"] = params_v["fim"] = params_h["fim"] = fim
+        
     join_vendas = ""
     if cat or prod:
         join_vendas = "JOIN produtos p ON vendas_itens.item_nome = p.nome"
@@ -441,24 +446,62 @@ async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str 
                 where_prod += " AND p.nome ILIKE :prod"
                 where_hist += " AND produto_nome ILIKE :prod"
             params_v["prod"] = params_h["prod"] = f"%{prod_str}%"
+
     with engine.connect() as conn:
         categorias_db = conn.execute(text("SELECT DISTINCT categoria FROM produtos WHERE categoria IS NOT NULL")).fetchall()
         opcoes_cat = "".join([f"<option value='{c.categoria}' {'selected' if cat == c.categoria else ''}>{c.categoria}</option>" for c in categorias_db])
+
         kpi = conn.execute(text(f"SELECT SUM(total_conta) as total, COUNT(*) as qtd, AVG(total_conta) as media FROM pulseiras WHERE {where_pulseira}"), params_p).fetchone()
         faturamento_total, total_comandas, ticket_medio = float(kpi.total or 0), int(kpi.qtd or 0), float(kpi.media or 0)
+
         pagamentos = conn.execute(text(f"SELECT forma_pagamento, COUNT(*) as qtd FROM pulseiras WHERE {where_pulseira} GROUP BY forma_pagamento"), params_p).fetchall()
         labels_pag, data_pag = [r.forma_pagamento or "N/D" for r in pagamentos], [r.qtd for r in pagamentos]
+
         garcons = conn.execute(text(f"SELECT garcom, SUM(vendas_itens.valor) as total FROM vendas_itens {join_vendas} WHERE {where_vendas} GROUP BY garcom ORDER BY total DESC"), params_v).fetchall()
+
         total_vendas_db = conn.execute(text(f"SELECT COUNT(*) as total_vendido FROM vendas_itens {join_vendas} WHERE {where_vendas}"), params_v).fetchone()
         total_saidas = int(total_vendas_db.total_vendido or 0)
+        
         total_entradas_db = conn.execute(text(f"SELECT SUM(qtd_adicionada) as total_entrou FROM historico_estoque WHERE {where_hist}"), params_h).fetchone()
         total_entradas = int(total_entradas_db.total_entrou or 0)
-        query_cruz = f"SELECT p.nome, p.estoque, COUNT(v.id) as vendidos FROM produtos p LEFT JOIN vendas_itens v ON p.nome = v.item_nome AND v.status = 'FECHADA' {'AND v.data_venda >= :inicio' if inicio else ''} {'AND v.data_venda <= :fim' if fim else ''} WHERE {where_prod} GROUP BY p.nome, p.estoque ORDER BY vendidos DESC LIMIT 10"
+
+        query_cruz = f"SELECT p.nome, p.estoque, COUNT(v.id) as vendidos FROM produtos p LEFT JOIN vendas_itens v ON p.nome = v.item_nome AND v.status = 'FECHADA' {'AND CAST(v.data_venda AS DATE) >= CAST(:inicio AS DATE)' if inicio else ''} {'AND CAST(v.data_venda AS DATE) <= CAST(:fim AS DATE)' if fim else ''} WHERE {where_prod} GROUP BY p.nome, p.estoque ORDER BY vendidos DESC LIMIT 10"
         cruzamento = conn.execute(text(query_cruz), params_v).fetchall()
         labels_cruz, data_cruz_vendidos, data_cruz_estoque = [r.nome for r in cruzamento], [r.vendidos for r in cruzamento], [r.estoque for r in cruzamento]
-    dash_css = """<style>.grid-dash { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; width: 100%; max-width: 1100px; margin-bottom: 20px; } .card-kpi { background: white; padding: 20px; border-radius: 10px; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid #d31a21; } .card-kpi.estoque { border-left-color: #e67e22; } .card-kpi h3 { margin: 0; font-size: 14px; color: #666; text-transform: uppercase; } .card-kpi p { margin: 10px 0 0; font-size: 24px; font-weight: bold; color: #0a3a7a; } .chart-container { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; width: 100%; max-width: 530px; display: inline-block; vertical-align: top; } .aba-btn { background: #062b5e; color: white; border: none; padding: 15px 30px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-right: 10px; transition: 0.3s; } .aba-btn:hover { background: #d31a21; } .filtro-bar { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border: 1px solid rgba(255,255,255,0.2); }</style><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>"""
-    return f"""<html><head>{CSS}{dash_css}</head><body><div class='main-area' style='padding: 30px; overflow-y: auto;'><h1 style='color:white; margin-bottom: 5px;'>📊 Painel de Gestão Avançado</h1><form class='filtro-bar' method='GET'><div><label style='font-size:12px;'>De:</label><br><input type='date' name='inicio' value='{inicio}' class='input-padrao' style='width:140px; margin:0;'></div><div><label style='font-size:12px;'>Até:</label><br><input type='date' name='fim' value='{fim}' class='input-padrao' style='width:140px; margin:0;'></div><div><label style='font-size:12px;'>Categoria:</label><br><select name='cat' class='input-padrao' style='width:130px; margin:0;'><option value=''>TODAS</option>{opcoes_cat}</select></div><div><label style='font-size:12px;'>Produto (Nome/Cód):</label><br><input type='text' name='prod' value='{prod}' placeholder='Ex: Heineken ou 001' class='input-padrao' style='width:150px; margin:0;'></div><div style='display:flex; align-items:flex-end;'><button class='btn-acao' style='background:#28a745; margin:0; height:45px; margin-top:17px; width:100px;'>FILTRAR</button></div><div style='display:flex; align-items:flex-end;'><a href='/dashboard' class='btn-acao' style='background:#666; margin:0; height:45px; margin-top:17px; width:100px; line-height:15px'>LIMPAR</a></div></form><div style='margin-bottom: 30px;'><button id='btn-fin' class='aba-btn' style='background:#17a2b8' onclick="showTab('fin')">💰 VISÃO FINANCEIRA</button><button id='btn-est' class='aba-btn' style='opacity:0.6; background:#e67e22' onclick="showTab('est')">📦 VISÃO ESTOQUE</button></div><div id='tab-fin'><div class='grid-dash'><div class='card-kpi'><h3>Faturamento do Período</h3><p>R$ {faturamento_total:.2f}</p></div><div class='card-kpi'><h3>Ticket Médio</h3><p>R$ {ticket_medio:.2f}</p></div><div class='card-kpi'><h3>Comandas Fechadas</h3><p>{total_comandas}</p></div></div><div style='width: 100%; max-width: 1100px;'><div class='chart-container'><h3 style='color:#333'>💰 Meios de Pagamento</h3><canvas id="chartPag"></canvas></div><div class='chart-container'><h3 style='color:#333'>👨‍🍳 Vendas por Garçom (R$)</h3><canvas id="chartGarcom"></canvas></div></div></div><div id='tab-est' style='display:none;'><div class='grid-dash'><div class='card-kpi estoque'><h3>Qtd de Entradas (Compras)</h3><p style='color:#28a745'>+{total_entradas} Itens</p></div><div class='card-kpi estoque'><h3>Qtd de Saídas (Vendas)</h3><p style='color:#d31a21'>-{total_saidas} Itens</p></div></div><div style='width: 100%; max-width: 1100px;'><div class='chart-container' style='max-width: 100%; display:block;'><h3 style='color:#333'>🔄 Comparativo Geral: Estoque Físico vs Vendidos</h3><canvas id="chartCruzamento"></canvas></div></div></div><br><a href='/central' class='btn-acao' style='width: 200px; margin:auto'>Voltar ao Início</a></div><script>function showTab(tab) {{ document.getElementById('tab-fin').style.display = tab === 'fin' ? 'block' : 'none'; document.getElementById('tab-est').style.display = tab === 'est' ? 'block' : 'none'; document.getElementById('btn-fin').style.opacity = tab === 'fin' ? '1' : '0.6'; document.getElementById('btn-est').style.opacity = tab === 'est' ? '1' : '0.6'; }} new Chart(document.getElementById('chartPag'), {{ type: 'doughnut', data: {{ labels: {json.dumps(labels_pag)}, datasets: [{{ data: {json.dumps(data_pag)}, backgroundColor: ['#0a3a7a', '#d31a21', '#ffc107', '#28a745'] }}] }} }}); new Chart(document.getElementById('chartGarcom'), {{ type: 'bar', data: {{ labels: {json.dumps([g.garcom or 'N/D' for g in garcons])}, datasets: [{{ label: 'Total Vendido (R$)', data: {json.dumps([float(g.total) for g in garcons])}, backgroundColor: '#17a2b8' }}] }} }}); new Chart(document.getElementById('chartCruzamento'), {{ type: 'bar', data: {{ labels: {json.dumps(labels_cruz)}, datasets: [{{ label: 'Qtd Vendida no Período', data: {json.dumps(data_cruz_vendidos)}, backgroundColor: '#d31a21' }}, {{ label: 'Estoque Físico Atual', data: {json.dumps(data_cruz_estoque)}, backgroundColor: '#0a3a7a' }}] }} }});</script></body></html>"""
 
+    dash_css = """<style>.grid-dash { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; width: 100%; max-width: 1100px; margin-bottom: 20px; } .card-kpi { background: white; padding: 20px; border-radius: 10px; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid #d31a21; } .card-kpi.estoque { border-left-color: #e67e22; } .card-kpi h3 { margin: 0; font-size: 14px; color: #666; text-transform: uppercase; } .card-kpi p { margin: 10px 0 0; font-size: 24px; font-weight: bold; color: #0a3a7a; } .chart-container { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; width: 100%; max-width: 530px; display: inline-block; vertical-align: top; } .aba-btn { background: #062b5e; color: white; border: none; padding: 15px 30px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-right: 10px; transition: 0.3s; } .aba-btn:hover { background: #d31a21; } .filtro-bar { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border: 1px solid rgba(255,255,255,0.2); }</style><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>"""
+
+    return f"""<html><head>{CSS}{dash_css}</head><body><div class='main-area' style='padding: 30px; overflow-y: auto;'><h1 style='color:white; margin-bottom: 5px;'>📊 Painel de Gestão Avançado</h1>
+    
+    <form class='filtro-bar' method='GET'>
+        <div><label style='font-size:12px;'>De:</label><br><input type='date' name='inicio' value='{inicio}' class='input-padrao' style='width:140px; margin:0;'></div>
+        <div><label style='font-size:12px;'>Até:</label><br><input type='date' name='fim' value='{fim}' class='input-padrao' style='width:140px; margin:0;'></div>
+        <div><label style='font-size:12px;'>Categoria:</label><br><select name='cat' class='input-padrao' style='width:130px; margin:0;'><option value=''>TODAS</option>{opcoes_cat}</select></div>
+        <div><label style='font-size:12px;'>Produto (Nome/Cód):</label><br><input type='text' name='prod' value='{prod}' placeholder='Ex: Heineken ou 001' class='input-padrao' style='width:150px; margin:0;'></div>
+        <div style='display:flex; align-items:flex-end;'><button class='btn-acao' style='background:#28a745; margin:0; height:45px; margin-top:17px; width:100px;'>FILTRAR</button></div>
+        <div style='display:flex; align-items:flex-end;'><a href='/dashboard' class='btn-acao' style='background:#666; margin:0; height:45px; margin-top:17px; width:100px; line-height:15px'>LIMPAR</a></div>
+    </form>
+
+    <div style='margin-bottom: 30px;'><button id='btn-fin' class='aba-btn' style='background:#17a2b8' onclick="showTab('fin')">💰 VISÃO FINANCEIRA</button><button id='btn-est' class='aba-btn' style='opacity:0.6; background:#e67e22' onclick="showTab('est')">📦 VISÃO ESTOQUE</button></div>
+    
+    <div id='tab-fin'>
+        <div class='grid-dash'><div class='card-kpi'><h3>Faturamento do Período</h3><p>R$ {faturamento_total:.2f}</p></div><div class='card-kpi'><h3>Ticket Médio</h3><p>R$ {ticket_medio:.2f}</p></div><div class='card-kpi'><h3>Comandas Fechadas</h3><p>{total_comandas}</p></div></div>
+        <div style='width: 100%; max-width: 1100px;'><div class='chart-container'><h3 style='color:#333'>💰 Meios de Pagamento</h3><canvas id="chartPag"></canvas></div><div class='chart-container'><h3 style='color:#333'>👨‍🍳 Vendas por Garçom (R$)</h3><canvas id="chartGarcom"></canvas></div></div>
+        <div class='card-center' style='max-width: 1100px; text-align: left; margin-top:20px;'><h3 style='color:black; margin-top:0'>👨‍🍳 Tabela de Performance</h3><table><tr style='color:black; border-bottom:2px solid #ccc'><th>Garçom</th><th>Total Vendido (R$)</th></tr>{"".join([f"<tr><td style='color:black'>{g.garcom or 'Não Identificado'}</td><td style='color:black; font-weight:bold'>R$ {float(g.total or 0):.2f}</td></tr>" for g in garcons])}</table></div>
+    </div>
+    
+    <div id='tab-est' style='display:none;'>
+        <div class='grid-dash'><div class='card-kpi estoque'><h3>Qtd de Entradas (Compras)</h3><p style='color:#28a745'>+{total_entradas} Itens</p></div><div class='card-kpi estoque'><h3>Qtd de Saídas (Vendas)</h3><p style='color:#d31a21'>-{total_saidas} Itens</p></div></div>
+        <div style='width: 100%; max-width: 1100px;'><div class='chart-container' style='max-width: 100%; display:block;'><h3 style='color:#333'>🔄 Comparativo Geral: Estoque Físico vs Vendidos</h3><canvas id="chartCruzamento"></canvas></div></div>
+    </div><br><a href='/central' class='btn-acao' style='width: 200px; margin:auto'>Voltar ao Início</a></div>
+    
+    <script>
+        function showTab(tab) {{ document.getElementById('tab-fin').style.display = tab === 'fin' ? 'block' : 'none'; document.getElementById('tab-est').style.display = tab === 'est' ? 'block' : 'none'; document.getElementById('btn-fin').style.opacity = tab === 'fin' ? '1' : '0.6'; document.getElementById('btn-est').style.opacity = tab === 'est' ? '1' : '0.6'; }} 
+        new Chart(document.getElementById('chartPag'), {{ type: 'doughnut', data: {{ labels: {json.dumps(labels_pag)}, datasets: [{{ data: {json.dumps(data_pag)}, backgroundColor: ['#0a3a7a', '#d31a21', '#ffc107', '#28a745'] }}] }} }}); 
+        new Chart(document.getElementById('chartGarcom'), {{ type: 'bar', data: {{ labels: {json.dumps([g.garcom or 'N/D' for g in garcons])}, datasets: [{{ label: 'Total Vendido (R$)', data: {json.dumps([float(g.total or 0) for g in garcons])}, backgroundColor: '#17a2b8' }}] }} }}); 
+        new Chart(document.getElementById('chartCruzamento'), {{ type: 'bar', data: {{ labels: {json.dumps(labels_cruz)}, datasets: [{{ label: 'Qtd Vendida no Período', data: {json.dumps(data_cruz_vendidos)}, backgroundColor: '#d31a21' }}, {{ label: 'Estoque Físico Atual', data: {json.dumps(data_cruz_estoque)}, backgroundColor: '#0a3a7a' }}] }} }});
+    </script></body></html>
+    
 @app.get("/logout")
 async def logout(request: Request):
     request.session.clear()

@@ -66,7 +66,7 @@ def formata_linha(esq, dir, width=32):
     return esq_str + " " * (width - len(esq_str) - len(dir_str)) + dir_str
 
 # --- CSS FULL ---
-IMG_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png"
+IMG_URL = "/static/image_074d9e.png"
 CSS = f"""
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">

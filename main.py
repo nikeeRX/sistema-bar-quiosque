@@ -20,13 +20,7 @@ MENU_INICIAL = {
     "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
 }
 
-CATEGORIA_IMAGENS = {
-    "CHOPP": "https://cdn-icons-png.flaticon.com/512/931/931949.png",
-    "CERVEJAS": "https://cdn-icons-png.flaticon.com/512/3233/3233800.png",
-    "PETISCOS": "https://cdn-icons-png.flaticon.com/512/2921/2921822.png",
-    "BEBIDAS": "https://cdn-icons-png.flaticon.com/512/920/920603.png",
-    "OUTROS": "https://cdn-icons-png.flaticon.com/512/1077/1077553.png"
-}
+EMOJIS = {"CHOPP": "🍺", "CERVEJAS": "🍻", "PETISCOS": "🍟", "BEBIDAS": "🍹", "OUTROS": "📦"}
 
 # --- CRIAÇÃO DAS TABELAS E MIGRAÇÕES ---
 with engine.begin() as conn:
@@ -72,83 +66,74 @@ def formata_linha(esq, dir, width=32):
     return esq_str + " " * (width - len(esq_str) - len(dir_str)) + dir_str
 
 # --- CSS FULL ---
-CSS = """
+IMG_URL = "https://logodownload.org/wp-content/uploads/2014/04/brahma-logo-0.png"
+CSS = f"""
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="apple-touch-icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png">
+<link rel="apple-touch-icon" href="{IMG_URL}">
 <style>
-    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
-    body { margin: 0; background: #0a3a7a; color: white; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-    .layout-vendas { display: flex; flex: 1; height: 100vh; }
-    .menu-lateral { width: 220px; padding: 20px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid rgba(255,255,255,0.1); background: #082d5e; overflow-y:auto; }
-    .btn-menu { background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 15px; cursor: pointer; text-decoration: none; display: flex; justify-content: space-between; }
-    .btn-menu:hover, .btn-menu.ativo { background: #d31a21; border-color: white; }
-    .main-area { flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; }
-    .logo-central { width: 140px; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }
-    .logo-peq { width: 100px; margin-bottom: 10px; }
-    .grid-produtos { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; width: 100%; max-width: 900px; }
-    .prod-card { border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s; color: white; border-width: 2px; border-style: solid; }
-    .prod-card:hover { transform: scale(1.05); border-color: white; }
-    .bg-green { background: linear-gradient(180deg, #28a745 0%, #1e7e34 100%); border-color: #145523; }
-    .bg-red { background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border-color: #5a0407; opacity: 0.8; }
-    .prod-card b { font-size: 14px; margin-bottom: 8px; text-shadow: 1px 1px 2px rgba(0,0,0,0.6); }
-    .prod-card span { font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 5px; }
-    .badge-estoque { font-size: 12px; margin-top: 8px; background: rgba(0,0,0,0.4); border-radius: 4px; padding: 3px; font-weight: bold; }
-    .comanda-lateral { width: 340px; background: white; color: black; border-left: 5px solid #d31a21; display: flex; flex-direction: column; }
-    .comanda-header { background: #d31a21; color: white; padding: 15px; font-weight: bold; text-align: center; font-size: 18px; }
-    .comanda-body { flex: 1; overflow-y: auto; padding: 15px; background: #f9f9f9; }
-    .secao-titulo { font-size: 12px; color: #666; text-transform: uppercase; font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 10px; padding-bottom: 5px; }
-    .item-linha { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; border-bottom: 1px dashed #ddd; padding-bottom: 5px; }
-    .comanda-footer { padding: 15px; background: white; border-top: 1px solid #ccc; }
-    .btn-acao { display: block; width: 100%; padding: 15px; margin-bottom: 8px; border: none; border-radius: 5px; font-weight: bold; color: white; cursor: pointer; text-align: center; text-decoration: none; font-size: 14px; background: #062b5e; }
-    .btn-acao:hover { background: #0d4b9c; }
-    .container-center { display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; overflow-y: auto; }
-    .card-center { background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 650px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); margin: auto; }
-    .input-padrao { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-    th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
-    
-    /* SWITCH DA NOTA FISCAL */
-    .switch { position: relative; display: inline-block; width: 50px; height: 24px; }
-    .switch input { opacity: 0; width: 0; height: 0; }
-    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
-    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
-    input:checked + .slider { background-color: #28a745; }
-    input:checked + .slider:before { transform: translateX(26px); }
-    
-    @media (max-width: 768px) {
-        body { height: auto; overflow: auto; }
-        .layout-vendas { display: flex; flex-direction: column; height: auto; min-height: 100vh; }
-        .menu-lateral { width: 100%; flex-direction: row; overflow-x: auto; padding: 10px; border-right: none; border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; gap: 8px; flex-shrink: 0; white-space: nowrap; -webkit-overflow-scrolling: touch; }
-        .btn-menu { padding: 10px 15px; font-size: 14px; text-align: center; flex: 0 0 auto; justify-content: center; }
-        .main-area { display: flex; overflow: visible; padding: 15px; flex-shrink: 0; width: 100%; }
-        .grid-produtos { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
-        .prod-card { min-height: 110px; padding: 10px; }
-        .comanda-lateral { width: 100%; display: flex; border-left: none; border-top: 5px solid #d31a21; flex-shrink: 0; }
-        .card-center { width: 95%; padding: 20px; }
-        .grid-dash { grid-template-columns: 1fr !important; }
-        .chart-container { width: 100% !important; max-width: 100% !important; padding: 10px !important; margin-bottom: 15px !important; display: block !important; }
-        .filtro-bar { flex-direction: column !important; align-items: stretch !important; gap: 15px !important; }
-        .aba-btn { width: 100% !important; margin-bottom: 10px !important; margin-right: 0 !important; }
-    }
+    * {{ box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }}
+    body {{ margin: 0; background: #0a3a7a; color: white; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }}
+    .layout-vendas {{ display: flex; flex: 1; height: 100vh; }}
+    .menu-lateral {{ width: 220px; padding: 20px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid rgba(255,255,255,0.1); background: #082d5e; overflow-y:auto; }}
+    .btn-menu {{ background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 15px; cursor: pointer; text-decoration: none; display: flex; justify-content: space-between; }}
+    .btn-menu:hover, .btn-menu.ativo {{ background: #d31a21; border-color: white; }}
+    .main-area {{ flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; }}
+    .logo-central {{ width: 140px; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }}
+    .logo-peq {{ width: 100px; margin-bottom: 10px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5)); }}
+    .grid-produtos {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; width: 100%; max-width: 900px; }}
+    .prod-card {{ border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s; color: white; border-width: 2px; border-style: solid; }}
+    .prod-card:hover {{ transform: scale(1.05); border-color: white; }}
+    .bg-green {{ background: linear-gradient(180deg, #28a745 0%, #1e7e34 100%); border-color: #145523; }}
+    .bg-red {{ background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border-color: #5a0407; opacity: 0.8; }}
+    .prod-card b {{ font-size: 14px; margin-bottom: 8px; text-shadow: 1px 1px 2px rgba(0,0,0,0.6); }}
+    .prod-card span {{ font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 5px; }}
+    .comanda-lateral {{ width: 340px; background: white; color: black; border-left: 5px solid #d31a21; display: flex; flex-direction: column; }}
+    .comanda-header {{ background: #d31a21; color: white; padding: 15px; font-weight: bold; text-align: center; font-size: 18px; }}
+    .comanda-body {{ flex: 1; overflow-y: auto; padding: 15px; background: #f9f9f9; }}
+    .secao-titulo {{ font-size: 12px; color: #666; text-transform: uppercase; font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 10px; padding-bottom: 5px; }}
+    .item-linha {{ display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; border-bottom: 1px dashed #ddd; padding-bottom: 5px; }}
+    .comanda-footer {{ padding: 15px; background: white; border-top: 1px solid #ccc; }}
+    .btn-acao {{ display: block; width: 100%; padding: 15px; margin-bottom: 8px; border: none; border-radius: 5px; font-weight: bold; color: white; cursor: pointer; text-align: center; text-decoration: none; font-size: 14px; background: #062b5e; }}
+    .btn-acao:hover {{ background: #0d4b9c; }}
+    .container-center {{ display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; overflow-y: auto; }}
+    .card-center {{ background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 650px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); margin: auto; }}
+    .input-padrao {{ width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }}
+    table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
+    th, td {{ padding: 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }}
+    .switch {{ position: relative; display: inline-block; width: 50px; height: 24px; }}
+    .switch input {{ opacity: 0; width: 0; height: 0; }}
+    .slider {{ position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }}
+    .slider:before {{ position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }}
+    input:checked + .slider {{ background-color: #28a745; }}
+    input:checked + .slider:before {{ transform: translateX(26px); }}
+    @media (max-width: 768px) {{
+        body {{ height: auto; overflow: auto; }}
+        .layout-vendas {{ display: flex; flex-direction: column; height: auto; min-height: 100vh; }}
+        .menu-lateral {{ width: 100%; flex-direction: row; overflow-x: auto; padding: 10px; border-right: none; border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; gap: 8px; flex-shrink: 0; white-space: nowrap; -webkit-overflow-scrolling: touch; }}
+        .btn-menu {{ padding: 10px 15px; font-size: 14px; text-align: center; flex: 0 0 auto; justify-content: center; }}
+        .main-area {{ display: flex; overflow: visible; padding: 15px; flex-shrink: 0; width: 100%; }}
+        .grid-produtos {{ grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }}
+        .prod-card {{ min-height: 110px; padding: 10px; }}
+        .comanda-lateral {{ width: 100%; display: flex; border-left: none; border-top: 5px solid #d31a21; flex-shrink: 0; }}
+        .card-center {{ width: 95%; padding: 20px; }}
+    }}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 """
 
-IMG_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png"
 IMG_LOGO = f"<div style='display:flex; justify-content:center; margin-bottom:20px;'><img src='{IMG_URL}' class='logo-central'></div>"
 IMG_LOGO_PEQ = f"<div style='display:flex; justify-content:center; margin-bottom:15px;'><img src='{IMG_URL}' class='logo-peq'></div>"
 
 # ==========================================
-# ROTAS INICIAIS
+# ROTAS INICIAIS E CARDÁPIO
 # ==========================================
 @app.get("/sw.js")
-async def get_sw(): return Response(content="self.addEventListener('install', e => { self.skipWaiting(); }); self.addEventListener('fetch', e => {});", media_type="application/javascript")
-@app.get("/manifest.json")
-async def get_manifest(): return {"name": "Quiosque Brahma", "short_name": "BrahmaApp", "start_url": "/", "display": "standalone", "background_color": "#0a3a7a", "theme_color": "#d31a21", "icons": [{"src": IMG_URL, "sizes": "512x512", "type": "image/png"}]}
+async def get_sw(): return Response(content="self.addEventListener('fetch', e => {});", media_type="application/javascript")
 
 @app.get("/", response_class=HTMLResponse)
-async def login_page(): return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO}<h2>Acesso ao Sistema</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form><br><a href='/cardapio' style='color:#062b5e; font-weight:bold; text-decoration:underline;'>Ver Cardápio Digital</a></div></div></body></html>"
+async def login_page(): 
+    return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO}<h2>Acesso ao Sistema</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form><br><a href='/cardapio' style='color:#062b5e; font-weight:bold; text-decoration:underline;'>Ver Cardápio Digital</a></div></div></body></html>"""
 
 @app.post("/login")
 async def login(request: Request):
@@ -173,47 +158,38 @@ async def central(request: Request):
         b += "<a href='/comissoes' class='btn-acao' style='background:#8e44ad'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#062b5e'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a>"
     if role == "admin":
         b += "<a href='/usuarios' class='btn-acao' style='background:#9b59b6'>👥 GERENCIAR USUÁRIOS</a>"
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<p>Logado como: <b>{user.upper()}</b></p>{b}<br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"
+    return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<p>Logado como: <b>{user.upper()}</b></p>{b}<br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"""
 
-# ==========================================
-# CARDÁPIO DIGITAL & QR CODE
-# ==========================================
 @app.get("/cardapio", response_class=HTMLResponse)
-async def cardapio_digital(request: Request):
+async def cardapio_digital():
     html_cats = ""
     with engine.connect() as conn:
-        prods = conn.execute(text("SELECT nome, categoria, preco, estoque FROM produtos ORDER BY categoria, nome")).fetchall()
-        menu_dict = {}
-        for p in prods:
-            c = p.categoria or 'OUTROS'
-            if c not in menu_dict: menu_dict[c] = []
-            menu_dict[c].append(p)
-        
-        for cat, lista in menu_dict.items():
-            img_cat = CATEGORIA_IMAGENS.get(cat, CATEGORIA_IMAGENS["OUTROS"])
+        for cat in EMOJIS.keys():
+            prods = conn.execute(text("SELECT nome, preco, estoque FROM produtos WHERE categoria=:c ORDER BY nome"), {"c": cat}).fetchall()
+            if not prods: continue
+            
             html_cats += f"""
-                <div style='text-align:center; margin-top:40px; margin-bottom:15px;'>
-                    <img src='{img_cat}' style='width:70px; height:70px; margin-bottom:10px; filter: drop-shadow(0px 4px 4px rgba(0,0,0,0.5));'>
-                    <h2 style='color:#f1c40f; border-bottom: 2px solid #d31a21; padding-bottom:5px; margin-top:0;'>{cat}</h2>
+                <div style='text-align:center; margin-top:40px;'>
+                    <div style='font-size:45px; margin-bottom:5px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));'>{EMOJIS[cat]}</div>
+                    <h2 style='color:#f1c40f; border-bottom: 2px solid #d31a21; display:inline-block; padding-bottom:5px; margin-top:0;'>{cat}</h2>
                 </div>
                 <div class='grid-produtos' style='justify-content:center; max-width:800px; margin:auto;'>
             """
-            for p in lista:
+            for p in prods:
                 if p.estoque > 0:
-                    html_cats += f"<div class='prod-card' style='background:#fff; color:#333; border:2px solid #ccc; cursor:default;'><b style='font-size:16px;'>{p.nome}</b><span style='background:#28a745; color:white; font-size:18px;'>R$ {float(p.preco):.2f}</span></div>"
+                    html_cats += f"<div class='prod-card' style='background:#2c2c2c; border:1px solid #444; cursor:default;'><b style='font-size:16px;'>{p.nome}</b><span style='color:#f1c40f; font-size:18px;'>R$ {float(p.preco):.2f}</span></div>"
                 else:
-                    html_cats += f"<div class='prod-card' style='background:#ffe6e6; color:#999; border:2px solid #d31a21; opacity:0.6; cursor:default;'><b><del style='font-size:16px;'>{p.nome}</del></b><span style='background:#d31a21; color:white; font-size:16px;'>❌ INDISPONÍVEL</span></div>"
+                    html_cats += f"<div class='prod-card' style='background:#1a1a1a; border:1px solid #d31a21; opacity:0.5; cursor:default;'><b style='font-size:16px;'><del>{p.nome}</del></b><span style='background:#d31a21; color:white; font-size:14px;'>ESGOTADO</span></div>"
             html_cats += "</div>"
             
-    return f"<html><head>{CSS}</head><body style='background:#111; overflow-y:auto;'><div style='padding:30px; width:100%;'>{IMG_LOGO}<h1 style='text-align:center; color:white; margin-bottom:0;'>CARDÁPIO DIGITAL</h1><p style='text-align:center; color:#ccc; margin-top:5px;'>Sincronizado em tempo real</p>{html_cats}<br><br><p style='text-align:center; color:#666;'>© 2024 Quiosque Brahma</p></div></body></html>"
+    return f"""<html><head>{CSS}</head><body style='background:#1a1a1a; overflow-y:auto;'><div style='padding:30px; width:100%;'>{IMG_LOGO}<h1 style='text-align:center; color:white; margin:bottom:0;'>CARDÁPIO DIGITAL</h1>{html_cats}<br><br><p style='text-align:center; color:#666;'>© Quiosque Brahma</p></div></body></html>"""
 
 @app.get("/qr", response_class=HTMLResponse)
 async def gerar_qr(request: Request):
     if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
     link_cardapio = str(request.base_url) + "cardapio"
-    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(link_cardapio)}"
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2 style='color:#d31a21;'>QR Code do Cardápio</h2><p style='color:#333;'>Imprima esta imagem e coloque nas mesas. O cardápio atualiza automaticamente conforme as vendas!</p><div style='background:white; padding:20px; display:inline-block; border-radius:15px; border:2px dashed #ccc; margin:20px 0;'><img src='{qr_url}' style='width:250px; height:250px;'></div><br><a href='{link_cardapio}' target='_blank' style='color:#062b5e; font-weight:bold; font-size:18px; text-decoration:underline;'>🔗 Acessar Link do Cardápio</a><br><br><br><a href='/central' class='btn-acao' style='background:#333;'>Voltar ao Painel</a></div></div></body></html>"
-# ==========================================
+    return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2 style='color:#d31a21;'>QR Code do Cardápio</h2><img src='https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={urllib.parse.quote(link_cardapio)}' style='margin:20px; border:2px solid #ccc; border-radius:10px;'><br><a href='{link_cardapio}' class='btn-acao' style='background:#28a745'>ACESSAR LINK</a><a href='/central' class='btn-acao' style='background:#333'>VOLTAR</a></div></div></body></html>"""
+    # ==========================================
 # GESTÃO DE CAIXA
 # ==========================================
 @app.get("/caixa", response_class=HTMLResponse)
@@ -352,7 +328,7 @@ async def excluir_produto(request: Request):
     return RedirectResponse(url="/estoque", status_code=303)
 
 # ==========================================
-# COMISSÕES
+# COMISSÕES E USUÁRIOS
 # ==========================================
 @app.get("/comissoes", response_class=HTMLResponse)
 async def tela_comissoes(request: Request, garcom_filtro: str = ""):
@@ -361,23 +337,19 @@ async def tela_comissoes(request: Request, garcom_filtro: str = ""):
     with engine.connect() as conn:
         garcons_db = conn.execute(text("SELECT DISTINCT garcom FROM vendas_itens WHERE garcom IS NOT NULL ORDER BY garcom")).fetchall()
         opcoes_garcom = "".join([f"<option value='{g.garcom}' {'selected' if garcom_filtro == g.garcom else ''}>{g.garcom}</option>" for g in garcons_db])
-        
         where_clause = "status = 'FECHADA' AND comissao_status = 'PENDENTE'"
         params = {}
         if garcom_filtro:
             where_clause += " AND garcom = :g"
             params["g"] = garcom_filtro
-            
         res_pend = conn.execute(text(f"SELECT CAST(data_venda AS DATE) as data, garcom, SUM(valor) as total_vendido, (SUM(valor) * 0.10) as comissao FROM vendas_itens WHERE {where_clause} GROUP BY CAST(data_venda AS DATE), garcom ORDER BY data DESC"), params).fetchall()
         for r in res_pend:
             linhas_pendentes += f"<tr><td style='color:black;'>{r.garcom}</td><td style='color:#062b5e;'>{r.data.strftime('%d/%m/%Y')}</td><td style='color:black;'>R$ {float(r.total_vendido):.2f}</td><td style='color:#d31a21; font-weight:bold;'>R$ {float(r.comissao):.2f}</td><td><form action='/pagar_comissao' method='post' style='margin:0;'><input type='hidden' name='data_venda' value='{r.data}'><input type='hidden' name='garcom' value='{r.garcom}'><button class='btn-acao' style='background:#28a745; padding:8px; font-size:12px;'>✔️ PAGO</button></form></td></tr>"
-
         where_clause_pagas = "status = 'FECHADA' AND comissao_status = 'PAGA'"
         if garcom_filtro: where_clause_pagas += " AND garcom = :g"
         res_pagas = conn.execute(text(f"SELECT CAST(data_venda AS DATE) as data, garcom, SUM(valor) as total_vendido, (SUM(valor) * 0.10) as comissao FROM vendas_itens WHERE {where_clause_pagas} GROUP BY CAST(data_venda AS DATE), garcom ORDER BY data DESC LIMIT 30"), params).fetchall()
         for r in res_pagas:
             linhas_pagas += f"<tr><td style='color:black;'>{r.garcom}</td><td style='color:#062b5e;'>{r.data.strftime('%d/%m/%Y')}</td><td style='color:black;'>R$ {float(r.total_vendido):.2f}</td><td style='color:#28a745; font-weight:bold;'>R$ {float(r.comissao):.2f}</td><td><span style='color:#28a745;'>PAGO</span></td></tr>"
-
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center' style='max-width:800px;'><h2>💸 Gestão de Comissões</h2><form method='GET' style='margin-bottom:20px; display:flex; gap:10px;'><select name='garcom_filtro' class='input-padrao' style='flex:1;'><option value=''>Todos</option>{opcoes_garcom}</select><button class='btn-acao' style='background:#062b5e; width:120px;'>FILTRAR</button></form><h3 style='color:#d31a21; text-align:left; border-bottom:2px solid #ccc;'>🔴 Pendentes</h3><div style='max-height:300px; overflow-y:auto; border:1px solid #ddd; margin-bottom:20px;'><table><tr><th style='color:black'>Func.</th><th style='color:black'>Data</th><th style='color:black'>Vendido</th><th style='color:black'>Comissão</th><th style='color:black'>Ação</th></tr>{linhas_pendentes if linhas_pendentes else '<tr><td colspan=5 style=color:black;text-align:center;>Nada pendente.</td></tr>'}</table></div><h3 style='color:#28a745; text-align:left; border-bottom:2px solid #ccc;'>🟢 Pagos</h3><div style='max-height:300px; overflow-y:auto; border:1px solid #ddd;'><table><tr><th style='color:black'>Func.</th><th style='color:black'>Data</th><th style='color:black'>Vendido</th><th style='color:black'>Comissão</th><th style='color:black'>Status</th></tr>{linhas_pagas if linhas_pagas else '<tr><td colspan=5 style=color:black;text-align:center;>Sem histórico.</td></tr>'}</table></div><br><a href='/central' class='btn-acao' style='width: 200px; margin:auto'>Voltar</a></div></div></body></html>"
 
 @app.post("/pagar_comissao")
@@ -388,9 +360,6 @@ async def pagar_comissao(request: Request):
     except: pass
     return RedirectResponse(url="/comissoes", status_code=303)
 
-# ==========================================
-# USUÁRIOS
-# ==========================================
 @app.get("/usuarios", response_class=HTMLResponse)
 async def tela_usuarios(request: Request):
     if request.session.get("role") != "admin": return RedirectResponse(url="/central")
@@ -418,9 +387,8 @@ async def excluir_usuario(request: Request):
         with engine.begin() as conn: conn.execute(text("DELETE FROM usuarios WHERE id = :id AND username != 'admin'"), {"id": f.get("id")})
     except: pass
     return RedirectResponse(url="/usuarios", status_code=303)
-
-# ==========================================
-# VENDAS / CARRINHO
+    # ==========================================
+# VENDAS / CARRINHO (PDV)
 # ==========================================
 @app.get("/vendas", response_class=HTMLResponse)
 async def vendas(request: Request, cat: str = "CHOPP", p: str = ""):
@@ -429,12 +397,15 @@ async def vendas(request: Request, cat: str = "CHOPP", p: str = ""):
     with engine.connect() as conn:
         for n, v, e in conn.execute(text("SELECT nome, preco, estoque FROM produtos WHERE categoria = :c ORDER BY nome"), {"c": cat}).fetchall():
             cor = 'bg-green' if e > 0 else 'bg-red'
-            prods += f"<div class='prod-card {cor}' onclick='add(\"{n}\", {float(v or 0)}, {int(e or 0)})'><b>{n}</b><span>R$ {float(v or 0):.2f}</span><div class='badge-estoque'>Estoque: {int(e or 0)}</div></div>"
+            prods += f"<div class='prod-card {cor}' onclick='add(\"{n}\", {float(v or 0)}, {int(e or 0)})'><b>{n}</b><span>R$ {float(v or 0):.2f}</span></div>"
         if p:
             for r in conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall():
                 itens_html += f"<div class='item-linha'><span>{r.qtd}x {r.item_nome}</span><span>R$ {float(r.tot or 0):.2f}</span></div>"
-    comanda_display = f"<div class='comanda-header'><div style='font-size:13px;'>PULSEIRA:</div><input type='number' id='input-pulseira' class='input-padrao' style='text-align:center; font-weight:bold; font-size:20px;' value='{p}'><button class='btn-acao' style='background:white; color:#d31a21;' onclick='window.location.href=\"/vendas?cat={cat}&p=\"+document.getElementById(\"input-pulseira\").value'>ACESSAR</button></div><div class='comanda-body'><div class='secao-titulo'>Consumo</div>{itens_html}<hr><div class='secao-titulo'>Novo Pedido</div><div id='novo-pedido'></div></div><div class='comanda-footer'><div style='display:flex; justify-content:space-between; font-weight:bold;'><span>Subtotal:</span><span id='tot-pedido'>R$ 0.00</span></div><br><button class='btn-acao' style='background:#28a745;' onclick='enviarPedido()'>LANÇAR PEDIDO</button><a href='/central' class='btn-acao' style='background:#333'>Voltar</a></div>"
-    return f"<html><head>{CSS}<script>const p_num = '{p}'; let cart = JSON.parse(sessionStorage.getItem('cart_'+p_num)) || []; function add(n,v,e) {{ if(!p_num) return alert('Acesse uma pulseira!'); if (e <= 0 || cart.filter(x => x.n === n).length >= e) return alert('❌ Sem estoque!'); cart.push({{n,v}}); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function render() {{ let html = ''; let t = 0; cart.forEach((i,idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black;'>X</b></span></div>`; t += i.v; }}); document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = 'R$ '+t.toFixed(2); }} function rem(idx) {{ cart.splice(idx,1); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function enviarPedido() {{ if(!p_num || cart.length === 0) return; let f = document.createElement('form'); f.method = 'POST'; f.action = '/lancar_pedido'; let i1 = document.createElement('input'); i1.name = 'p'; i1.value = p_num; f.appendChild(i1); let i2 = document.createElement('input'); i2.name = 'itens'; i2.value = JSON.stringify(cart); f.appendChild(i2); document.body.appendChild(f); sessionStorage.removeItem('cart_'+p_num); f.submit(); }} window.onload = render;</script></head><body><div class='layout-vendas'><div class='menu-lateral'><a href='/vendas?cat=CHOPP&p={p}' class='btn-menu'>🍺 CHOPP</a><a href='/vendas?cat=CERVEJAS&p={p}' class='btn-menu'>🍾 CERVEJAS</a><a href='/vendas?cat=PETISCOS&p={p}' class='btn-menu'>🍟 PETISCOS</a><a href='/vendas?cat=BEBIDAS&p={p}' class='btn-menu'>🍹 BEBIDAS</a><a href='/vendas?cat=OUTROS&p={p}' class='btn-menu'>📦 OUTROS</a></div><div class='main-area'>{IMG_LOGO}<h2>{cat}</h2><div class='grid-produtos'>{prods}</div></div><div class='comanda-lateral'>{comanda_display}</div></div></body></html>"
+    comanda_display = f"""<div class='comanda-header'><div style='font-size:13px;'>PULSEIRA:</div><input type='number' id='input-pulseira' class='input-padrao' style='text-align:center; font-weight:bold; font-size:20px;' value='{p}'><button class='btn-acao' style='background:white; color:#d31a21;' onclick='window.location.href=\"/vendas?cat={cat}&p=\"+document.getElementById(\"input-pulseira\").value'>ACESSAR</button></div><div class='comanda-body'><div class='secao-titulo'>Consumo</div>{itens_html}<hr><div class='secao-titulo'>Novo Pedido</div><div id='novo-pedido'></div></div><div class='comanda-footer'><div style='display:flex; justify-content:space-between; font-weight:bold;'><span>Subtotal:</span><span id='tot-pedido'>R$ 0.00</span></div><br><button class='btn-acao' style='background:#28a745;' onclick='enviarPedido()'>LANÇAR PEDIDO</button><a href='/central' class='btn-acao' style='background:#333'>Voltar</a></div>"""
+    
+    botoes_menu = "".join([f"<a href='/vendas?cat={k}&p={p}' class='btn-menu'>{EMOJIS.get(k,'')} {k}</a>" for k in EMOJIS.keys()])
+    
+    return f"""<html><head>{CSS}<script>const p_num = '{p}'; let cart = JSON.parse(sessionStorage.getItem('cart_'+p_num)) || []; function add(n,v,e) {{ if(!p_num) return alert('Acesse uma pulseira!'); if (e <= 0 || cart.filter(x => x.n === n).length >= e) return alert('❌ Sem estoque!'); cart.push({{n,v}}); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function render() {{ let html = ''; let t = 0; cart.forEach((i,idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black;'>X</b></span></div>`; t += i.v; }}); document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = 'R$ '+t.toFixed(2); }} function rem(idx) {{ cart.splice(idx,1); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function enviarPedido() {{ if(!p_num || cart.length === 0) return; let f = document.createElement('form'); f.method = 'POST'; f.action = '/lancar_pedido'; let i1 = document.createElement('input'); i1.name = 'p'; i1.value = p_num; f.appendChild(i1); let i2 = document.createElement('input'); i2.name = 'itens'; i2.value = JSON.stringify(cart); f.appendChild(i2); document.body.appendChild(f); sessionStorage.removeItem('cart_'+p_num); f.submit(); }} window.onload = render;</script></head><body><div class='layout-vendas'><div class='menu-lateral'>{botoes_menu}</div><div class='main-area'>{IMG_LOGO}<h2>{cat}</h2><div class='grid-produtos'>{prods}</div></div><div class='comanda-lateral'>{comanda_display}</div></div></body></html>"""
 
 @app.post("/lancar_pedido")
 async def lancar_pedido(request: Request):
@@ -444,18 +415,18 @@ async def lancar_pedido(request: Request):
     try:
         with engine.begin() as conn:
             conn.execute(text("UPDATE pulseiras SET total_conta = total_conta + :t WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"t": tot, "p": p})
+            txt = f"--------------------------------\n      TICKET PREPARO\nPULSEIRA: {p}\nATENDENTE: {u}\n--------------------------------\n"
             for i in itens:
                 conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor, garcom) VALUES (:p, :n, :v, :g)"), {"p": p, "n": i['n'], "v": i['v'], "g": u})
                 conn.execute(text("UPDATE produtos SET estoque = GREATEST(estoque - 1, 0) WHERE nome = :n"), {"n": i['n']})
-            txt = f"--------------------------------\n      TICKET PREPARO\nPULSEIRA: {p}\nATENDENTE: {u}\n--------------------------------\n"
-            for i in itens: txt += f"1x {i['n']} - R$ {i['v']:.2f}\n"
+                txt += f"1x {i['n']} - R$ {i['v']:.2f}\n"
             txt += "--------------------------------\n"
             conn.execute(text("INSERT INTO fila_impressao (conteudo) VALUES (:txt)"), {"txt": txt})
     except: pass
     return RedirectResponse(url=f"/vendas?p={p}", status_code=303)
 
 # ==========================================
-# FECHAR CONTA COM NFC-e
+# FECHAR CONTA COM NFC-e E CÁLCULOS
 # ==========================================
 @app.get("/fechar_conta", response_class=HTMLResponse)
 async def fechar_conta(request: Request, q: str = ""):
@@ -471,7 +442,7 @@ async def fechar_conta(request: Request, q: str = ""):
                 taxa = subt * 0.10
                 tot_final = subt + taxa
                 res = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; color:#333; margin-top:20px; text-align:left;'>
-                    <h3 style='text-align:center;'>{query.nome_completo}</h3><p style='text-align:center;'>Pulseira: <b>{query.numero_pulseira}</b></p>
+                    <h3 style='text-align:center; margin-top:0;'>{query.nome_completo}</h3><p style='text-align:center;'>Pulseira: <b>{query.numero_pulseira}</b></p>
                     <div style='background:white; padding:15px; border-radius:8px; max-height:220px; overflow-y:auto; border:1px solid #ddd;'>{lista}</div>
                     <div style='padding-top:15px; font-size:16px;'>
                         <div class='item-linha'><span>Consumo:</span><span>R$ {subt:.2f}</span></div>
@@ -512,7 +483,7 @@ async def confirmar_fechamento(request: Request):
     return RedirectResponse(url="/central", status_code=303)
 
 # ==========================================
-# CADASTRO E BUSCA
+# CADASTRO E BUSCA DE CLIENTES
 # ==========================================
 @app.get("/buscar", response_class=HTMLResponse)
 async def tela_busca(q: str = ""):
@@ -536,7 +507,8 @@ async def abrir(request: Request):
     return RedirectResponse(url=f"/vendas?p={p}", status_code=303)
 
 @app.get("/cadastro", response_class=HTMLResponse)
-async def tela_cadastro(): return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Novo Cliente</h2><form action='/salvar' method='post'><input class='input-padrao' name='nome' placeholder='Nome Completo' required><input class='input-padrao' name='cpf' placeholder='CPF' required><input class='input-padrao' name='nasc' type='date' required><input class='input-padrao' name='contato' placeholder='WhatsApp' required><input class='input-padrao' name='pulseira' placeholder='Nº Pulseira' required><button class='btn-acao' style='background:#d31a21'>SALVAR E ABRIR</button></form><br><a href='/central'>Voltar</a></div></div></body></html>"
+async def tela_cadastro(): 
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Novo Cliente</h2><form action='/salvar' method='post'><input class='input-padrao' name='nome' placeholder='Nome Completo' required><input class='input-padrao' name='cpf' placeholder='CPF' required><input class='input-padrao' name='nasc' type='date' required><input class='input-padrao' name='contato' placeholder='WhatsApp' required><input class='input-padrao' name='pulseira' placeholder='Nº Pulseira' required><button class='btn-acao' style='background:#d31a21'>SALVAR E ABRIR</button></form><br><a href='/central'>Voltar</a></div></div></body></html>"
 
 @app.post("/salvar")
 async def salvar(request: Request):
@@ -552,16 +524,22 @@ async def salvar(request: Request):
     return RedirectResponse(url=f"/vendas?p={p}", status_code=303)
 
 # ==========================================
-# UTILITÁRIOS FINAIS
+# UTILITÁRIOS FINAIS E FILA DE IMPRESSÃO
 # ==========================================
 @app.get("/logout")
-async def logout(request: Request): request.session.clear(); return RedirectResponse("/")
+async def logout(request: Request): 
+    request.session.clear()
+    return RedirectResponse("/")
+
 @app.get("/api/pendentes")
 async def api_pendentes():
     with engine.connect() as conn:
         r = conn.execute(text("SELECT id, conteudo FROM fila_impressao WHERE status = 'PENDENTE' LIMIT 1")).fetchone()
         return {"jobs": [{"id": r.id, "conteudo": r.conteudo}]} if r else {"jobs": []}
+
 @app.post("/api/impresso/{j_id}")
 async def api_impresso(j_id: int):
-    with engine.begin() as conn: conn.execute(text("UPDATE fila_impressao SET status='IMPRESSO' WHERE id=:i"), {"i": j_id})
+    with engine.begin() as conn: 
+        conn.execute(text("UPDATE fila_impressao SET status='IMPRESSO' WHERE id=:i"), {"i": j_id})
     return {"ok": True}
+    

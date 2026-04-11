@@ -66,7 +66,7 @@ def formata_linha(esq, dir, width=32):
     return esq_str + " " * (width - len(esq_str) - len(dir_str)) + dir_str
 
 # --- CSS FULL ---
-IMG_URL = "https://logodownload.org/wp-content/uploads/2014/04/brahma-logo-0.png"
+IMG_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/Brahma_Logo.svg/512px-Brahma_Logo.svg.png"
 CSS = f"""
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -79,8 +79,8 @@ CSS = f"""
     .btn-menu {{ background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 15px; cursor: pointer; text-decoration: none; display: flex; justify-content: space-between; }}
     .btn-menu:hover, .btn-menu.ativo {{ background: #d31a21; border-color: white; }}
     .main-area {{ flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; }}
-    .logo-central {{ width: 140px; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }}
-    .logo-peq {{ width: 100px; margin-bottom: 10px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5)); }}
+    .logo-central {{ width: 140px; max-width: 100%; height: auto; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }}
+    .logo-peq {{ width: 100px; max-width: 100%; height: auto; margin-bottom: 10px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5)); }}
     .grid-produtos {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; width: 100%; max-width: 900px; }}
     .prod-card {{ border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s; color: white; border-width: 2px; border-style: solid; }}
     .prod-card:hover {{ transform: scale(1.05); border-color: white; }}
@@ -135,6 +135,60 @@ async def get_sw(): return Response(content="self.addEventListener('fetch', e =>
 async def login_page(): 
     return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO}<h2>Acesso ao Sistema</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form><br><a href='/cardapio' style='color:#062b5e; font-weight:bold; text-decoration:underline;'>Ver Cardápio Digital</a></div></div></body></html>"""
 
+@app.post("/login")
+async def login(request: Request):
+    f = await request.form()
+    with engine.connect() as conn:
+        user = conn.execute(text("SELECT username, role FROM usuarios WHERE username = :u AND password = :p"), {"u": f.get("user", "").strip().lower(), "p": f.get("pw", "")}).fetchone()
+        if user:
+            request.session["user"], request.session["role"] = user.username, user.role
+            return RedirectResponse(url="/central", status_code=303)
+    return HTMLResponse("<script>alert('Usuário ou Senha incorretos!'); window.location.href='/';</script>")
+
+@app.get("/central", response_class=HTMLResponse)
+async def central(request: Request):
+    user, role = request.session.get("user"), request.session.get("role")
+    if not user: return RedirectResponse(url="/")
+    b = ""
+    if role in ["admin", "gerente", "garcom", "caixa", "portaria"]:
+        b += f"<a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR PULSEIRA</a>"
+    if role in ["admin", "gerente", "garcom", "caixa"]:
+        b += f"<a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / LANÇAR ITENS</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a><a href='/caixa' class='btn-acao' style='background:#e67e22'>💰 GESTÃO DE CAIXA</a>"
+    if role in ["admin", "gerente"]:
+        b += "<a href='/comissoes' class='btn-acao' style='background:#8e44ad'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#062b5e'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a>"
+    if role == "admin":
+        b += "<a href='/usuarios' class='btn-acao' style='background:#9b59b6'>👥 GERENCIAR USUÁRIOS</a>"
+    return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<p>Logado como: <b>{user.upper()}</b></p>{b}<br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"""
+
+@app.get("/cardapio", response_class=HTMLResponse)
+async def cardapio_digital():
+    html_cats = ""
+    with engine.connect() as conn:
+        for cat in EMOJIS.keys():
+            prods = conn.execute(text("SELECT nome, preco, estoque FROM produtos WHERE categoria=:c ORDER BY nome"), {"c": cat}).fetchall()
+            if not prods: continue
+            
+            html_cats += f"""
+                <div style='text-align:center; margin-top:40px;'>
+                    <div style='font-size:45px; margin-bottom:5px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));'>{EMOJIS[cat]}</div>
+                    <h2 style='color:#f1c40f; border-bottom: 2px solid #d31a21; display:inline-block; padding-bottom:5px; margin-top:0;'>{cat}</h2>
+                </div>
+                <div class='grid-produtos' style='justify-content:center; max-width:800px; margin:auto;'>
+            """
+            for p in prods:
+                if p.estoque > 0:
+                    html_cats += f"<div class='prod-card' style='background:#2c2c2c; border:1px solid #444; cursor:default;'><b style='font-size:16px;'>{p.nome}</b><span style='color:#f1c40f; font-size:18px;'>R$ {float(p.preco):.2f}</span></div>"
+                else:
+                    html_cats += f"<div class='prod-card' style='background:#1a1a1a; border:1px solid #d31a21; opacity:0.5; cursor:default;'><b style='font-size:16px;'><del>{p.nome}</del></b><span style='background:#d31a21; color:white; font-size:14px;'>ESGOTADO</span></div>"
+            html_cats += "</div>"
+            
+    return f"""<html><head>{CSS}</head><body style='background:#1a1a1a; overflow-y:auto;'><div style='padding:30px; width:100%;'>{IMG_LOGO}<h1 style='text-align:center; color:white; margin:bottom:0;'>CARDÁPIO DIGITAL</h1>{html_cats}<br><br><p style='text-align:center; color:#666;'>© Quiosque Brahma</p></div></body></html>"""
+
+@app.get("/qr", response_class=HTMLResponse)
+async def gerar_qr(request: Request):
+    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    link_cardapio = str(request.base_url) + "cardapio"
+    return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2 style='color:#d31a21;'>QR Code do Cardápio</h2><img src='https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={urllib.parse.quote(link_cardapio)}' style='margin:20px; border:2px solid #ccc; border-radius:10px;'><br><a href='{link_cardapio}' class='btn-acao' style='background:#28a745'>ACESSAR LINK</a><a href='/central' class='btn-acao' style='background:#333'>VOLTAR</a></div></div></body></html>"""
 @app.post("/login")
 async def login(request: Request):
     f = await request.form()

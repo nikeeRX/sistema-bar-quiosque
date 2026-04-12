@@ -20,7 +20,7 @@ MENU_INICIAL = {
     "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
 }
 
-# Suas imagens PNG vão aqui. A moldura branca vai salvar a visibilidade delas!
+# Suas imagens PNG vão aqui. Elas vão aparecer logo acima da faixa laranja!
 IMAGENS_CAT = {
     "CHOPP": "https://cdn-icons-png.flaticon.com/512/1054/1054060.png",
     "CERVEJAS": "https://cdn-icons-png.flaticon.com/512/3014/3014490.png",
@@ -107,6 +107,20 @@ CSS = f"""
     .slider:before {{ position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }}
     input:checked + .slider {{ background-color: #28a745; }}
     input:checked + .slider:before {{ transform: translateX(26px); }}
+    
+    /* CSS DO CARDÁPIO ESTILO PUB */
+    .menu-duas-colunas {{ display: grid; grid-template-columns: 1fr; gap: 40px; max-width: 1000px; margin: auto; padding: 10px; }}
+    @media (min-width: 800px) {{ .menu-duas-colunas {{ grid-template-columns: 1fr 1fr; gap: 60px; }} }}
+    .faixa-laranja {{ background: #e67e22; color: white; padding: 12px 20px; font-size: 22px; font-weight: bold; text-align: center; text-transform: uppercase; position: relative; margin: 0 auto 25px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.6); max-width: 90%; font-family: 'Arial Black', sans-serif; letter-spacing: 1px; }}
+    .faixa-laranja::before, .faixa-laranja::after {{ content: ""; position: absolute; top: 0; width: 0; height: 0; border-top: 25px solid transparent; border-bottom: 25px solid transparent; }}
+    .faixa-laranja::before {{ left: -20px; border-right: 20px solid #e67e22; }}
+    .faixa-laranja::after {{ right: -20px; border-left: 20px solid #e67e22; }}
+    .linha-menu {{ display: flex; align-items: flex-end; margin-bottom: 12px; font-size: 15px; color: #ddd; }}
+    .linha-nome {{ white-space: nowrap; text-transform: uppercase; font-family: 'Arial', sans-serif; letter-spacing: 0.5px; }}
+    .linha-pontos {{ flex-grow: 1; border-bottom: 2px dotted #666; margin: 0 10px; position: relative; top: -5px; opacity: 0.7; }}
+    .linha-preco {{ white-space: nowrap; font-weight: bold; color: white; font-size: 16px; }}
+    .esgotado-txt {{ color: #d31a21; font-size: 11px; font-weight: bold; margin-left: 8px; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px; border: 1px solid #d31a21; vertical-align: middle; }}
+    
     @media (max-width: 768px) {{
         body {{ height: auto; overflow: auto; }}
         .layout-vendas {{ display: flex; flex-direction: column; height: auto; min-height: 100vh; }}
@@ -170,24 +184,33 @@ async def cardapio_digital():
             prods = conn.execute(text("SELECT nome, preco, estoque FROM produtos WHERE categoria=:c ORDER BY nome"), {"c": cat}).fetchall()
             if not prods: continue
             
-            # Aqui está o fundo branco blindado pra imagem não sumir
-            html_cats += f"""
-                <div style='text-align:center; margin-top:40px;'>
-                    <div style='background:white; border-radius:50%; width:110px; height:110px; display:inline-flex; align-items:center; justify-content:center; margin:auto; box-shadow:0 4px 10px rgba(0,0,0,0.5); border: 4px solid #d31a21;'>
-                        <img src='{IMAGENS_CAT.get(cat, "")}' style='width: 70px; height: 70px; object-fit: contain;'>
-                    </div>
-                    <br>
-                    <h2 style='color:#f1c40f; border-bottom: 2px solid #d31a21; display:inline-block; padding-bottom:5px; margin-top:15px;'>{cat}</h2>
-                </div>
-                <div class='grid-produtos' style='justify-content:center; max-width:800px; margin:auto;'>
-            """
+            itens_html = ""
             for p in prods:
                 if p.estoque > 0:
-                    html_cats += f"<div class='prod-card' style='background:#2c2c2c; border:1px solid #444; cursor:default;'><b style='font-size:16px;'>{p.nome}</b><span style='color:#f1c40f; font-size:18px;'>R$ {float(p.preco):.2f}</span></div>"
+                    itens_html += f"<div class='linha-menu'><div class='linha-nome'>{p.nome}</div><div class='linha-pontos'></div><div class='linha-preco'>R$ {float(p.preco):.2f}</div></div>"
                 else:
-                    html_cats += f"<div class='prod-card' style='background:#1a1a1a; border:1px solid #d31a21; opacity:0.5; cursor:default;'><b style='font-size:16px;'><del>{p.nome}</del></b><span style='background:#d31a21; color:white; font-size:14px; font-weight:bold; margin-top:5px; padding:2px;'>⚠️ ESGOTADO</span></div>"
-            html_cats += "</div>"
-    return f"""<html><head>{CSS}</head><body style='background:#1a1a1a; overflow-y:auto;'><div style='padding:30px; width:100%;'>{IMG_LOGO}<h1 style='text-align:center; color:white; margin:bottom:0;'>CARDÁPIO DIGITAL</h1>{html_cats}<br><br><p style='text-align:center; color:#666;'>© Quiosque Brahma</p></div></body></html>"""
+                    itens_html += f"<div class='linha-menu' style='opacity:0.6;'><div class='linha-nome'><del>{p.nome}</del><span class='esgotado-txt'>ESGOTADO</span></div><div class='linha-pontos'></div><div class='linha-preco'>R$ {float(p.preco):.2f}</div></div>"
+            
+            html_cats += f"""
+                <div style='margin-bottom: 40px;'>
+                    <div style='text-align:center; margin-bottom: -20px; position:relative; z-index:10;'>
+                        <div style='background:rgba(255,255,255,0.1); border-radius:50%; width:90px; height:90px; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 4px 10px rgba(0,0,0,0.8); border: 2px solid #e67e22; padding: 10px; backdrop-filter: blur(5px);'>
+                            <img src='{IMAGENS_CAT.get(cat, "")}' style='width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.8));'>
+                        </div>
+                    </div>
+                    <div style='margin: 0 20px;'>
+                        <div class='faixa-laranja'>{cat}</div>
+                    </div>
+                    <div style='padding: 0 10px; margin-top: 10px;'>
+                        {itens_html}
+                    </div>
+                </div>
+            """
+            
+    # Fundo texturizado escuro estilo bar
+    body_style = "background-color: #1a1a1a; background-image: radial-gradient(#333 1px, transparent 1px); background-size: 20px 20px; overflow-y:auto;"
+    
+    return f"""<html><head>{CSS}</head><body style='{body_style}'><div style='padding:40px 15px; width:100%; max-width:1100px; margin:auto;'>{IMG_LOGO}<h1 style='text-align:center; color:white; margin-bottom:50px; font-family:\"Arial Black\", sans-serif; letter-spacing: 2px; text-shadow: 2px 2px 4px black;'>CARDÁPIO DIGITAL</h1><div class='menu-duas-colunas'>{html_cats}</div><br><br><p style='text-align:center; color:#666;'>© Quiosque Brahma</p></div></body></html>"""
 
 @app.get("/qr", response_class=HTMLResponse)
 async def gerar_qr(request: Request):
@@ -389,8 +412,6 @@ async def vendas(request: Request, cat: str = "CHOPP", p: str = ""):
     with engine.connect() as conn:
         for n, v, e in conn.execute(text("SELECT nome, preco, estoque FROM produtos WHERE categoria = :c ORDER BY nome"), {"c": cat}).fetchall():
             estoque_atual = int(e or 0)
-            
-            # Verificação Blindada de Estoque: Aparece Vermelho e Esgotado se for <= 0
             if estoque_atual > 0:
                 cor = 'bg-green'
                 txt_estoque = f"<div style='font-size:12px; margin-top:5px; background:rgba(0,0,0,0.4); border-radius:4px; padding:2px;'>📦 Estoque: {estoque_atual}</div>"
@@ -408,7 +429,6 @@ async def vendas(request: Request, cat: str = "CHOPP", p: str = ""):
     
     comanda_display = f"""<div class='comanda-header'><div style='font-size:13px;'>PULSEIRA:</div><input type='number' id='input-pulseira' class='input-padrao' style='text-align:center; font-weight:bold; font-size:20px;' value='{p}'><button class='btn-acao' style='background:white; color:#d31a21;' onclick='window.location.href=\"/vendas?cat={cat}&p=\"+document.getElementById(\"input-pulseira\").value'>ACESSAR</button></div><div class='comanda-body'><div class='secao-titulo'>Consumo</div>{itens_html}<hr><div class='secao-titulo'>Novo Pedido</div><div id='novo-pedido'></div></div><div class='comanda-footer'><div style='display:flex; justify-content:space-between; font-weight:bold;'><span>Subtotal:</span><span id='tot-pedido'>R$ 0.00</span></div><br><button class='btn-acao' style='background:#28a745;' onclick='enviarPedido()'>LANÇAR PEDIDO</button><a href='/central' class='btn-acao' style='background:#333'>Voltar</a></div>"""
     
-    # Adicionando um fundo branco redondo atrás dos ícones laterais para não sumirem
     botoes_menu = "".join([f"<a href='/vendas?cat={k}&p={p}' class='btn-menu'><span style='background:white; border-radius:50%; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; box-shadow: 0 2px 4px rgba(0,0,0,0.5);'><img src='{IMAGENS_CAT.get(k, '')}' style='width:20px; height:20px; object-fit:contain;'></span> {k}</a>" for k in IMAGENS_CAT.keys()])
     
     return f"""<html><head>{CSS}<script>const p_num = '{p}'; let cart = JSON.parse(sessionStorage.getItem('cart_'+p_num)) || []; function add(n,v,e) {{ if(!p_num) return alert('Acesse uma pulseira!'); if (e <= 0 || cart.filter(x => x.n === n).length >= e) return alert('❌ Sem estoque!'); cart.push({{n,v}}); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function render() {{ let html = ''; let t = 0; cart.forEach((i,idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black;'>X</b></span></div>`; t += i.v; }}); document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = 'R$ '+t.toFixed(2); }} function rem(idx) {{ cart.splice(idx,1); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function enviarPedido() {{ if(!p_num || cart.length === 0) return; let f = document.createElement('form'); f.method = 'POST'; f.action = '/lancar_pedido'; let i1 = document.createElement('input'); i1.name = 'p'; i1.value = p_num; f.appendChild(i1); let i2 = document.createElement('input'); i2.name = 'itens'; i2.value = JSON.stringify(cart); f.appendChild(i2); document.body.appendChild(f); sessionStorage.removeItem('cart_'+p_num); f.submit(); }} window.onload = render;</script></head><body><div class='layout-vendas'><div class='menu-lateral'>{botoes_menu}</div><div class='main-area'>{IMG_LOGO}<h2>{cat}</h2><div class='grid-produtos'>{prods}</div></div><div class='comanda-lateral'>{comanda_display}</div></div></body></html>"""

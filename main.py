@@ -20,7 +20,6 @@ MENU_INICIAL = {
     "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
 }
 
-# Suas imagens PNG vão aqui. Elas vão aparecer logo acima da faixa laranja!
 IMAGENS_CAT = {
     "CHOPP": "https://cdn-icons-png.flaticon.com/512/1054/1054060.png",
     "CERVEJAS": "https://cdn-icons-png.flaticon.com/512/3014/3014490.png",
@@ -108,7 +107,6 @@ CSS = f"""
     input:checked + .slider {{ background-color: #28a745; }}
     input:checked + .slider:before {{ transform: translateX(26px); }}
     
-    /* CSS DO CARDÁPIO ESTILO PUB */
     .menu-duas-colunas {{ display: grid; grid-template-columns: 1fr; gap: 40px; max-width: 1000px; margin: auto; padding: 10px; }}
     @media (min-width: 800px) {{ .menu-duas-colunas {{ grid-template-columns: 1fr 1fr; gap: 60px; }} }}
     .faixa-laranja {{ background: #e67e22; color: white; padding: 12px 20px; font-size: 22px; font-weight: bold; text-align: center; text-transform: uppercase; position: relative; margin: 0 auto 25px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.6); max-width: 90%; font-family: 'Arial Black', sans-serif; letter-spacing: 1px; }}
@@ -183,14 +181,12 @@ async def cardapio_digital():
         for cat in IMAGENS_CAT.keys():
             prods = conn.execute(text("SELECT nome, preco, estoque FROM produtos WHERE categoria=:c ORDER BY nome"), {"c": cat}).fetchall()
             if not prods: continue
-            
             itens_html = ""
             for p in prods:
                 if p.estoque > 0:
                     itens_html += f"<div class='linha-menu'><div class='linha-nome'>{p.nome}</div><div class='linha-pontos'></div><div class='linha-preco'>R$ {float(p.preco):.2f}</div></div>"
                 else:
                     itens_html += f"<div class='linha-menu' style='opacity:0.6;'><div class='linha-nome'><del>{p.nome}</del><span class='esgotado-txt'>ESGOTADO</span></div><div class='linha-pontos'></div><div class='linha-preco'>R$ {float(p.preco):.2f}</div></div>"
-            
             html_cats += f"""
                 <div style='margin-bottom: 40px;'>
                     <div style='text-align:center; margin-bottom: -20px; position:relative; z-index:10;'>
@@ -206,10 +202,7 @@ async def cardapio_digital():
                     </div>
                 </div>
             """
-            
-    # Fundo texturizado escuro estilo bar
     body_style = "background-color: #1a1a1a; background-image: radial-gradient(#333 1px, transparent 1px); background-size: 20px 20px; overflow-y:auto;"
-    
     return f"""<html><head>{CSS}</head><body style='{body_style}'><div style='padding:40px 15px; width:100%; max-width:1100px; margin:auto;'>{IMG_LOGO}<h1 style='text-align:center; color:white; margin-bottom:50px; font-family:\"Arial Black\", sans-serif; letter-spacing: 2px; text-shadow: 2px 2px 4px black;'>CARDÁPIO DIGITAL</h1><div class='menu-duas-colunas'>{html_cats}</div><br><br><p style='text-align:center; color:#666;'>© Quiosque Brahma</p></div></body></html>"""
 
 @app.get("/qr", response_class=HTMLResponse)
@@ -269,7 +262,7 @@ async def resumo_whatsapp(request: Request):
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center' style='max-width:600px;'><h2>Auditoria Concluída</h2><div style='background:#f4f4f4; padding:20px; border-radius:8px; text-align:left; color:black; font-family:monospace; font-size:14px; margin-bottom:20px; white-space:pre-wrap;'>{mensagem.replace('*', '<b>').replace('<b>', '</b>', 1)}</div><a href='{zap_url}' target='_blank' class='btn-acao' style='background:#25D366; font-size:18px; padding:20px;'>📱 ENVIAR RESUMO WHATSAPP</a><br><a href='/caixa' style='color:gray'>Voltar</a></div></div></body></html>"
 
 @app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str = "", prod: str = ""):
+async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str = "", prod: str = "", garcom_filtro: str = ""):
     if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
     where_pulseira, where_vendas, where_hist, where_prod = "status = 'FECHADA'", "status = 'FECHADA'", "1=1", "1=1"
     params_p, params_v, params_h = {}, {}, {}
@@ -277,6 +270,11 @@ async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str 
         where_pulseira += " AND CAST(data_fechamento AS DATE) >= CAST(:inicio AS DATE)"; where_vendas += " AND CAST(data_venda AS DATE) >= CAST(:inicio AS DATE)"; where_hist += " AND CAST(data_entrada AS DATE) >= CAST(:inicio AS DATE)"; params_p["inicio"] = params_v["inicio"] = params_h["inicio"] = inicio
     if fim:
         where_pulseira += " AND CAST(data_fechamento AS DATE) <= CAST(:fim AS DATE)"; where_vendas += " AND CAST(data_venda AS DATE) <= CAST(:fim AS DATE)"; where_hist += " AND CAST(data_entrada AS DATE) <= CAST(:fim AS DATE)"; params_p["fim"] = params_v["fim"] = params_h["fim"] = fim
+    
+    if garcom_filtro:
+        where_vendas += " AND vendas_itens.garcom = :g_filtro"
+        params_v["g_filtro"] = garcom_filtro
+
     join_vendas = ""
     if cat or prod:
         join_vendas = "JOIN produtos p ON vendas_itens.item_nome = p.nome"
@@ -286,16 +284,32 @@ async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str 
             try: prod_id = int(prod_str); where_vendas += " AND (p.nome ILIKE :prod OR p.id = :prod_id)"; where_prod += " AND (p.nome ILIKE :prod OR p.id = :prod_id)"; where_hist += " AND produto_nome IN (SELECT nome FROM produtos WHERE nome ILIKE :prod OR id = :prod_id)"; params_v["prod_id"] = params_h["prod_id"] = prod_id
             except ValueError: where_vendas += " AND p.nome ILIKE :prod"; where_prod += " AND p.nome ILIKE :prod"; where_hist += " AND produto_nome ILIKE :prod"
             params_v["prod"] = params_h["prod"] = f"%{prod_str}%"
+            
     with engine.connect() as conn:
         categorias_db = conn.execute(text("SELECT DISTINCT categoria FROM produtos WHERE categoria IS NOT NULL")).fetchall()
         opcoes_cat = "".join([f"<option value='{c.categoria}' {'selected' if cat == c.categoria else ''}>{c.categoria}</option>" for c in categorias_db])
+        
+        garcons_lista = conn.execute(text("SELECT DISTINCT garcom FROM vendas_itens WHERE garcom IS NOT NULL")).fetchall()
+        opcoes_garcom = "".join([f"<option value='{g.garcom}' {'selected' if garcom_filtro == g.garcom else ''}>{g.garcom}</option>" for g in garcons_lista])
+        
         kpi = conn.execute(text(f"SELECT SUM(total_conta) as total, AVG(total_conta) as media FROM pulseiras WHERE {where_pulseira}"), params_p).fetchone()
         faturamento_bruto = float(kpi.total or 0); ticket_medio = float(kpi.media or 0)
-        comissao_db = conn.execute(text(f"SELECT SUM(valor * 0.10) as comissao_total FROM vendas_itens WHERE {where_vendas} AND comissao_status = 'PAGA'"), params_v).fetchone()
+        comissao_db = conn.execute(text(f"SELECT SUM(valor * 0.10) as comissao_total FROM vendas_itens {join_vendas} WHERE {where_vendas} AND comissao_status = 'PAGA'"), params_v).fetchone()
         comissoes_pagas = float(comissao_db.comissao_total or 0); faturamento_liquido = faturamento_bruto - comissoes_pagas
         pagamentos = conn.execute(text(f"SELECT forma_pagamento, COUNT(*) as qtd FROM pulseiras WHERE {where_pulseira} GROUP BY forma_pagamento"), params_p).fetchall()
         labels_pag, data_pag = [r.forma_pagamento or "N/D" for r in pagamentos], [r.qtd for r in pagamentos]
-        garcons = conn.execute(text(f"SELECT garcom, SUM(vendas_itens.valor) as total FROM vendas_itens {join_vendas} WHERE {where_vendas} GROUP BY garcom ORDER BY total DESC"), params_v).fetchall()
+        
+        # Rankings e Tops
+        top_qtd_db = conn.execute(text(f"SELECT item_nome, COUNT(*) as qtd FROM vendas_itens {join_vendas} WHERE {where_vendas} GROUP BY item_nome ORDER BY qtd DESC LIMIT 3"), params_v).fetchall()
+        html_top_qtd = "".join([f"<div class='item-linha' style='color:black;'><span><b>{i+1}º</b> {r.item_nome}</span><b style='color:#062b5e;'>{r.qtd} un</b></div>" for i, r in enumerate(top_qtd_db)])
+        
+        top_valor_db = conn.execute(text(f"SELECT item_nome, SUM(valor) as total FROM vendas_itens {join_vendas} WHERE {where_vendas} GROUP BY item_nome ORDER BY total DESC LIMIT 3"), params_v).fetchall()
+        html_top_valor = "".join([f"<div class='item-linha' style='color:black;'><span><b>{i+1}º</b> {r.item_nome}</span><b style='color:#28a745;'>R$ {float(r.total):.2f}</b></div>" for i, r in enumerate(top_valor_db)])
+        
+        rank_func_db = conn.execute(text(f"SELECT garcom, COUNT(*) as qtd, SUM(valor) as total FROM vendas_itens {join_vendas} WHERE {where_vendas} GROUP BY garcom ORDER BY total DESC"), params_v).fetchall()
+        html_rank_func = "".join([f"<tr><td style='color:black;'><b>{i+1}º</b> {r.garcom or 'N/D'}</td><td style='color:#062b5e; text-align:center;'>{r.qtd}</td><td style='color:#28a745; text-align:right; font-weight:bold;'>R$ {float(r.total):.2f}</td></tr>" for i, r in enumerate(rank_func_db)])
+        
+        garcons = rank_func_db # Reaproveitando para o gráfico de barras
         total_vendas_db = conn.execute(text(f"SELECT COUNT(*) as total_vendido FROM vendas_itens {join_vendas} WHERE {where_vendas}"), params_v).fetchone()
         total_saidas = int(total_vendas_db.total_vendido or 0)
         total_entradas_db = conn.execute(text(f"SELECT SUM(qtd_adicionada) as total_entrou FROM historico_estoque WHERE {where_hist}"), params_h).fetchone()
@@ -303,8 +317,21 @@ async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str 
         query_cruz = f"SELECT p.nome, p.estoque, COUNT(v.id) as vendidos FROM produtos p LEFT JOIN vendas_itens v ON p.nome = v.item_nome AND v.status = 'FECHADA' {'AND CAST(v.data_venda AS DATE) >= CAST(:inicio AS DATE)' if inicio else ''} {'AND CAST(v.data_venda AS DATE) <= CAST(:fim AS DATE)' if fim else ''} WHERE {where_prod} GROUP BY p.nome, p.estoque ORDER BY vendidos DESC LIMIT 10"
         cruzamento = conn.execute(text(query_cruz), params_v).fetchall()
         labels_cruz, data_cruz_vendidos, data_cruz_estoque = [r.nome for r in cruzamento], [r.vendidos for r in cruzamento], [r.estoque for r in cruzamento]
-    dash_css = "<style>.grid-dash { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; width: 100%; max-width: 1100px; margin-bottom: 20px; } .card-kpi { background: white; padding: 20px; border-radius: 10px; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid #d31a21; } .card-kpi h3 { margin: 0; font-size: 14px; color: #666; text-transform: uppercase; } .card-kpi p { margin: 10px 0 0; font-size: 24px; font-weight: bold; color: #0a3a7a; } .chart-container { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; width: 100%; max-width: 530px; display: inline-block; vertical-align: top; } .aba-btn { background: #062b5e; color: white; border: none; padding: 15px 30px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-right: 10px; transition: 0.3s; } .aba-btn:hover { background: #d31a21; } .filtro-bar { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border: 1px solid rgba(255,255,255,0.2); }</style>"
-    return f"<html><head>{CSS}{dash_css}</head><body><div class='main-area' style='padding: 30px; overflow-y: auto;'><h1 style='color:white; margin-bottom: 5px;'>📊 Dashboard</h1><form class='filtro-bar' method='GET'><div><label style='font-size:12px;'>De:</label><br><input type='date' name='inicio' value='{inicio}' class='input-padrao' style='width:140px; margin:0;'></div><div><label style='font-size:12px;'>Até:</label><br><input type='date' name='fim' value='{fim}' class='input-padrao' style='width:140px; margin:0;'></div><div><label style='font-size:12px;'>Categoria:</label><br><select name='cat' class='input-padrao' style='width:130px; margin:0;'><option value=''>TODAS</option>{opcoes_cat}</select></div><div><label style='font-size:12px;'>Produto:</label><br><input type='text' name='prod' value='{prod}' class='input-padrao' style='width:150px; margin:0;'></div><div style='display:flex; align-items:flex-end;'><button class='btn-acao' style='background:#28a745; margin:0; height:45px; margin-top:17px; width:100px;'>FILTRAR</button></div></form><div style='margin-bottom: 30px;'><button id='btn-fin' class='aba-btn' style='background:#17a2b8' onclick=\"showTab('fin')\">💰 FINANCEIRO</button><button id='btn-est' class='aba-btn' style='opacity:0.6; background:#e67e22' onclick=\"showTab('est')\">📦 ESTOQUE</button></div><div id='tab-fin'><div class='grid-dash'><div class='card-kpi'><h3>Bruto</h3><p>R$ {faturamento_bruto:.2f}</p></div><div class='card-kpi'><h3>Líquido</h3><p style='color:#28a745'>R$ {faturamento_liquido:.2f}</p></div><div class='card-kpi'><h3>Comissões Pagas</h3><p style='color:#8e44ad'>R$ {comissoes_pagas:.2f}</p></div><div class='card-kpi'><h3>Ticket Médio</h3><p>R$ {ticket_medio:.2f}</p></div></div><div style='width: 100%; max-width: 1100px;'><div class='chart-container'><h3 style='color:#333'>💰 Pagamentos</h3><canvas id='chartPag'></canvas></div><div class='chart-container'><h3 style='color:#333'>👨‍🍳 Garçons</h3><canvas id='chartGarcom'></canvas></div></div></div><div id='tab-est' style='display:none;'><div class='grid-dash'><div class='card-kpi'><h3>Entradas</h3><p style='color:#28a745'>+{total_entradas}</p></div><div class='card-kpi'><h3>Saídas</h3><p style='color:#d31a21'>-{total_saidas}</p></div></div><div style='width: 100%; max-width: 1100px;'><div class='chart-container' style='max-width: 100%; display:block;'><h3 style='color:#333'>🔄 Estoque vs Vendidos</h3><canvas id='chartCruzamento'></canvas></div></div></div><br><a href='/central' class='btn-acao' style='width: 200px;'>Voltar</a></div><script>function showTab(tab) {{ document.getElementById('tab-fin').style.display = tab === 'fin' ? 'block' : 'none'; document.getElementById('tab-est').style.display = tab === 'est' ? 'block' : 'none'; document.getElementById('btn-fin').style.opacity = tab === 'fin' ? '1' : '0.6'; document.getElementById('btn-est').style.opacity = tab === 'est' ? '1' : '0.6'; }} new Chart(document.getElementById('chartPag'), {{ type: 'doughnut', data: {{ labels: {json.dumps(labels_pag)}, datasets: [{{ data: {json.dumps(data_pag)}, backgroundColor: ['#0a3a7a', '#d31a21', '#ffc107', '#28a745'] }}] }} }}); new Chart(document.getElementById('chartGarcom'), {{ type: 'bar', data: {{ labels: {json.dumps([g.garcom or 'N/D' for g in garcons])}, datasets: [{{ label: 'Total (R$)', data: {json.dumps([float(g.total or 0) for g in garcons])}, backgroundColor: '#17a2b8' }}] }} }}); new Chart(document.getElementById('chartCruzamento'), {{ type: 'bar', data: {{ labels: {json.dumps(labels_cruz)}, datasets: [{{ label: 'Vendidos', data: {json.dumps(data_cruz_vendidos)}, backgroundColor: '#d31a21' }}, {{ label: 'Estoque Físico', data: {json.dumps(data_cruz_estoque)}, backgroundColor: '#0a3a7a' }}] }} }});</script></body></html>"
+        
+    dash_css = """<style>
+        .grid-dash { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; width: 100%; max-width: 1100px; margin-bottom: 20px; } 
+        .card-kpi { background: white; padding: 20px; border-radius: 10px; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid #d31a21; } 
+        .card-kpi h3 { margin: 0; font-size: 14px; color: #666; text-transform: uppercase; } 
+        .card-kpi p { margin: 10px 0 0; font-size: 24px; font-weight: bold; color: #0a3a7a; } 
+        .chart-container { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; width: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.1); } 
+        .aba-btn { background: #062b5e; color: white; border: none; padding: 15px 30px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-right: 10px; transition: 0.3s; } 
+        .aba-btn:hover { background: #d31a21; } 
+        .filtro-bar { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border: 1px solid rgba(255,255,255,0.2); }
+        .rank-table { width: 100%; border-collapse: collapse; margin-top:10px; }
+        .rank-table th, .rank-table td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; }
+    </style>"""
+    
+    return f"<html><head>{CSS}{dash_css}</head><body><div class='main-area' style='padding: 30px; overflow-y: auto;'><h1 style='color:white; margin-bottom: 5px;'>📊 Dashboard e Gestão</h1><form class='filtro-bar' method='GET'><div><label style='font-size:12px;'>De:</label><br><input type='date' name='inicio' value='{inicio}' class='input-padrao' style='width:140px; margin:0;'></div><div><label style='font-size:12px;'>Até:</label><br><input type='date' name='fim' value='{fim}' class='input-padrao' style='width:140px; margin:0;'></div><div><label style='font-size:12px;'>Categoria:</label><br><select name='cat' class='input-padrao' style='width:120px; margin:0;'><option value=''>TODAS</option>{opcoes_cat}</select></div><div><label style='font-size:12px;'>Produto:</label><br><input type='text' name='prod' value='{prod}' class='input-padrao' style='width:130px; margin:0;'></div><div><label style='font-size:12px;'>Garçom/Func.:</label><br><select name='garcom_filtro' class='input-padrao' style='width:130px; margin:0;'><option value=''>TODOS</option>{opcoes_garcom}</select></div><div style='display:flex; align-items:flex-end;'><button class='btn-acao' style='background:#28a745; margin:0; height:45px; margin-top:17px; width:100px;'>FILTRAR</button></div></form><div style='margin-bottom: 30px;'><button id='btn-fin' class='aba-btn' style='background:#17a2b8' onclick=\"showTab('fin')\">💰 FINANCEIRO</button><button id='btn-est' class='aba-btn' style='opacity:0.6; background:#e67e22' onclick=\"showTab('est')\">📦 ESTOQUE</button></div><div id='tab-fin'><div class='grid-dash'><div class='card-kpi'><h3>Bruto</h3><p>R$ {faturamento_bruto:.2f}</p></div><div class='card-kpi'><h3>Líquido</h3><p style='color:#28a745'>R$ {faturamento_liquido:.2f}</p></div><div class='card-kpi'><h3>Comissões Pagas</h3><p style='color:#8e44ad'>R$ {comissoes_pagas:.2f}</p></div><div class='card-kpi'><h3>Ticket Médio</h3><p>R$ {ticket_medio:.2f}</p></div></div><div class='grid-dash' style='grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));'><div class='chart-container'><h3 style='color:#333; margin-top:0; border-bottom:2px solid #ccc; padding-bottom:5px;'>🏆 Top 3 Mais Vendidos (Qtd)</h3>{html_top_qtd if html_top_qtd else '<p style=\"color:black;\">Sem dados no período.</p>'}</div><div class='chart-container'><h3 style='color:#333; margin-top:0; border-bottom:2px solid #ccc; padding-bottom:5px;'>💎 Top 3 Lucrativos (R$)</h3>{html_top_valor if html_top_valor else '<p style=\"color:black;\">Sem dados no período.</p>'}</div></div><div class='chart-container' style='max-width: 1100px;'><h3 style='color:#333; margin-top:0; border-bottom:2px solid #ccc; padding-bottom:5px;'>👨‍🍳 Ranking de Funcionários</h3><div style='max-height: 250px; overflow-y: auto;'><table class='rank-table'><tr><th style='color:black;'>Funcionário</th><th style='color:black; text-align:center;'>Itens Vendidos</th><th style='color:black; text-align:right;'>Faturamento</th></tr>{html_rank_func if html_rank_func else '<tr><td colspan=\"3\" style=\"color:black;text-align:center;\">Sem dados de vendas.</td></tr>'}</table></div></div><div style='width: 100%; max-width: 1100px;'><div class='chart-container' style='max-width:530px; display:inline-block; vertical-align:top;'><h3 style='color:#333'>💰 Pagamentos</h3><canvas id='chartPag'></canvas></div><div class='chart-container' style='max-width:530px; display:inline-block; vertical-align:top; margin-left:20px;'><h3 style='color:#333'>📈 Gráfico de Garçons</h3><canvas id='chartGarcom'></canvas></div></div></div><div id='tab-est' style='display:none;'><div class='grid-dash'><div class='card-kpi'><h3>Entradas</h3><p style='color:#28a745'>+{total_entradas}</p></div><div class='card-kpi'><h3>Saídas</h3><p style='color:#d31a21'>-{total_saidas}</p></div></div><div style='width: 100%; max-width: 1100px;'><div class='chart-container' style='max-width: 100%; display:block;'><h3 style='color:#333'>🔄 Estoque vs Vendidos</h3><canvas id='chartCruzamento'></canvas></div></div></div><br><a href='/central' class='btn-acao' style='width: 200px;'>Voltar</a></div><script>function showTab(tab) {{ document.getElementById('tab-fin').style.display = tab === 'fin' ? 'block' : 'none'; document.getElementById('tab-est').style.display = tab === 'est' ? 'block' : 'none'; document.getElementById('btn-fin').style.opacity = tab === 'fin' ? '1' : '0.6'; document.getElementById('btn-est').style.opacity = tab === 'est' ? '1' : '0.6'; }} new Chart(document.getElementById('chartPag'), {{ type: 'doughnut', data: {{ labels: {json.dumps(labels_pag)}, datasets: [{{ data: {json.dumps(data_pag)}, backgroundColor: ['#0a3a7a', '#d31a21', '#ffc107', '#28a745'] }}] }} }}); new Chart(document.getElementById('chartGarcom'), {{ type: 'bar', data: {{ labels: {json.dumps([g.garcom or 'N/D' for g in garcons])}, datasets: [{{ label: 'Total (R$)', data: {json.dumps([float(g.total or 0) for g in garcons])}, backgroundColor: '#17a2b8' }}] }} }}); new Chart(document.getElementById('chartCruzamento'), {{ type: 'bar', data: {{ labels: {json.dumps(labels_cruz)}, datasets: [{{ label: 'Vendidos', data: {json.dumps(data_cruz_vendidos)}, backgroundColor: '#d31a21' }}, {{ label: 'Estoque Físico', data: {json.dumps(data_cruz_estoque)}, backgroundColor: '#0a3a7a' }}] }} }});</script></body></html>"
 
 @app.get("/estoque", response_class=HTMLResponse)
 async def tela_estoque(request: Request):
@@ -418,19 +445,14 @@ async def vendas(request: Request, cat: str = "CHOPP", p: str = ""):
             else:
                 cor = 'bg-red'
                 txt_estoque = f"<div style='font-size:12px; margin-top:5px; background:#5a0407; border-radius:4px; padding:2px; font-weight:bold; color:#ffbaba;'>⚠️ ESGOTADO</div>"
-            
             prods += f"<div class='prod-card {cor}' onclick='add(\"{n}\", {float(v or 0)}, {estoque_atual})'><b>{n}</b><span>R$ {float(v or 0):.2f}</span>{txt_estoque}</div>"
-            
         if p:
             role = request.session.get("role")
             for r in conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall():
                 btn_estorno = f"<form action='/estorno' method='post' style='display:inline; margin:0;'><input type='hidden' name='p' value='{p}'><input type='hidden' name='i' value='{r.item_nome}'><button style='background:none;border:none;color:#d31a21;font-weight:bold;cursor:pointer;margin-left:8px;font-size:16px;' title='Estornar 1x'>✖</button></form>" if role in ['admin', 'gerente'] else ""
                 itens_html += f"<div class='item-linha'><span style='display:flex;align-items:center;'>{r.qtd}x {r.item_nome} {btn_estorno}</span><span>R$ {float(r.tot or 0):.2f}</span></div>"
-    
     comanda_display = f"""<div class='comanda-header'><div style='font-size:13px;'>PULSEIRA:</div><input type='number' id='input-pulseira' class='input-padrao' style='text-align:center; font-weight:bold; font-size:20px;' value='{p}'><button class='btn-acao' style='background:white; color:#d31a21;' onclick='window.location.href=\"/vendas?cat={cat}&p=\"+document.getElementById(\"input-pulseira\").value'>ACESSAR</button></div><div class='comanda-body'><div class='secao-titulo'>Consumo</div>{itens_html}<hr><div class='secao-titulo'>Novo Pedido</div><div id='novo-pedido'></div></div><div class='comanda-footer'><div style='display:flex; justify-content:space-between; font-weight:bold;'><span>Subtotal:</span><span id='tot-pedido'>R$ 0.00</span></div><br><button class='btn-acao' style='background:#28a745;' onclick='enviarPedido()'>LANÇAR PEDIDO</button><a href='/central' class='btn-acao' style='background:#333'>Voltar</a></div>"""
-    
     botoes_menu = "".join([f"<a href='/vendas?cat={k}&p={p}' class='btn-menu'><span style='background:white; border-radius:50%; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; box-shadow: 0 2px 4px rgba(0,0,0,0.5);'><img src='{IMAGENS_CAT.get(k, '')}' style='width:20px; height:20px; object-fit:contain;'></span> {k}</a>" for k in IMAGENS_CAT.keys()])
-    
     return f"""<html><head>{CSS}<script>const p_num = '{p}'; let cart = JSON.parse(sessionStorage.getItem('cart_'+p_num)) || []; function add(n,v,e) {{ if(!p_num) return alert('Acesse uma pulseira!'); if (e <= 0 || cart.filter(x => x.n === n).length >= e) return alert('❌ Sem estoque!'); cart.push({{n,v}}); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function render() {{ let html = ''; let t = 0; cart.forEach((i,idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black;'>X</b></span></div>`; t += i.v; }}); document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = 'R$ '+t.toFixed(2); }} function rem(idx) {{ cart.splice(idx,1); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function enviarPedido() {{ if(!p_num || cart.length === 0) return; let f = document.createElement('form'); f.method = 'POST'; f.action = '/lancar_pedido'; let i1 = document.createElement('input'); i1.name = 'p'; i1.value = p_num; f.appendChild(i1); let i2 = document.createElement('input'); i2.name = 'itens'; i2.value = JSON.stringify(cart); f.appendChild(i2); document.body.appendChild(f); sessionStorage.removeItem('cart_'+p_num); f.submit(); }} window.onload = render;</script></head><body><div class='layout-vendas'><div class='menu-lateral'>{botoes_menu}</div><div class='main-area'>{IMG_LOGO}<h2>{cat}</h2><div class='grid-produtos'>{prods}</div></div><div class='comanda-lateral'>{comanda_display}</div></div></body></html>"""
 
 @app.post("/estorno")

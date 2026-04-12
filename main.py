@@ -170,9 +170,63 @@ async def central(request: Request):
         b += f"<a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / LANÇAR ITENS</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a><a href='/caixa' class='btn-acao' style='background:#e67e22'>💰 GESTÃO DE CAIXA</a>"
     if role in ["admin", "gerente"]:
         b += "<a href='/comissoes' class='btn-acao' style='background:#8e44ad'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#062b5e'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a>"
+        b += "<a href='/baixar_conector' class='btn-acao' style='background:#f39c12; color:black;'>📥 BAIXAR CONECTOR DE IMPRESSORA</a>"
     if role == "admin":
         b += "<a href='/usuarios' class='btn-acao' style='background:#9b59b6'>👥 GERENCIAR USUÁRIOS</a>"
     return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<p>Logado como: <b>{user.upper()}</b></p>{b}<br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"""
+
+@app.get("/baixar_conector")
+async def baixar_conector(request: Request):
+    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    
+    # Injeta a URL atual dinamicamente no script
+    base_url = str(request.base_url).rstrip('/')
+    
+    script_content = f"""import time
+import requests
+import win32print
+
+# Conector de Impressao - Quiosque Brahma
+API_URL = "{base_url}"
+
+def imprimir_ticket(texto):
+    impressora_padrao = win32print.GetDefaultPrinter()
+    try:
+        hPrinter = win32print.OpenPrinter(impressora_padrao)
+        hJob = win32print.StartDocPrinter(hPrinter, 1, ("Ticket Brahma", None, "RAW"))
+        win32print.StartPagePrinter(hPrinter)
+        
+        win32print.WritePrinter(hPrinter, texto.encode("utf-8"))
+        win32print.WritePrinter(hPrinter, b"\\n\\n\\n\\n\\x1B\\x6D") # Corte de papel
+        
+        win32print.EndPagePrinter(hPrinter)
+        win32print.EndDocPrinter(hPrinter)
+        win32print.ClosePrinter(hPrinter)
+        print("✔️ Ticket Impresso com Sucesso!")
+    except Exception as e:
+        print(f"❌ Erro na impressora: {{e}}")
+
+print("=========================================")
+print("🚀 CONECTOR DE IMPRESSORA INICIADO")
+print(f"Conectado em: {{API_URL}}")
+print("Deixe essa janela aberta para receber tickets...")
+print("=========================================\\n")
+
+while True:
+    try:
+        resposta = requests.get(f"{{API_URL}}/api/pendentes", timeout=5)
+        if resposta.status_code == 200:
+            dados = resposta.json()
+            for job in dados.get("jobs", []):
+                print(f"🖨️ Imprimindo pedido ID {{job['id']}}...")
+                imprimir_ticket(job['conteudo'])
+                requests.post(f"{{API_URL}}/api/impresso/{{job['id']}}", timeout=5)
+    except Exception as e:
+        pass # Ignora erros de conexao temporarios
+        
+    time.sleep(3)
+"""
+    return Response(content=script_content, media_type="text/x-python", headers={"Content-Disposition": "attachment; filename=conector_impressao.py"})
 
 @app.get("/cardapio", response_class=HTMLResponse)
 async def cardapio_digital():

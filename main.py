@@ -17,10 +17,10 @@ MENU_INICIAL = {
     "CHOPP": [("Caneca 350ml", 11.9), ("Descartável 500ml", 13.9), ("Tulipa 700ml", 17.9), ("Torre 2.5L", 84.9), ("Torre 3.5L", 99.9)],
     "CERVEJAS": [("Original 600ml", 12.9), ("Amstel 600ml", 12.0), ("Brahma Duplo Malte", 12.0), ("Heineken 600ml", 16.9), ("Spaten LN", 8.9), ("Corona LN", 10.0), ("Heineken LN", 10.0), ("Stella LN", 8.9), ("Heineken Zero", 10.0)],
     "PETISCOS": [("Fritas", 21.9), ("Fritas c/ Queijo", 25.9), ("Fritas Cheddar/Bacon", 27.9), ("Kibe 10un", 34.9), ("Kibe c/ Queijo", 37.9), ("Frango Passarinho", 28.9), ("Carne Sol c/ Fritas", 54.9), ("Calabresa Acebolada", 22.9), ("Tábua Frios", 34.9)],
-    "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
+    "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
 }
 
-# Substitua estes links pelas suas imagens png bonitonas depois!
+# Suas imagens PNG vão aqui. A moldura branca vai salvar a visibilidade delas!
 IMAGENS_CAT = {
     "CHOPP": "https://cdn-icons-png.flaticon.com/512/1054/1054060.png",
     "CERVEJAS": "https://cdn-icons-png.flaticon.com/512/3014/3014490.png",
@@ -76,9 +76,8 @@ CSS = f"""
     body {{ margin: 0; background: #0a3a7a; color: white; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }}
     .layout-vendas {{ display: flex; flex: 1; height: 100vh; }}
     .menu-lateral {{ width: 220px; padding: 20px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid rgba(255,255,255,0.1); background: #082d5e; overflow-y:auto; }}
-    .btn-menu {{ background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 15px; cursor: pointer; text-decoration: none; display: flex; justify-content: space-between; align-items:center; }}
+    .btn-menu {{ background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 15px; cursor: pointer; text-decoration: none; display: flex; justify-content: flex-start; align-items:center; gap: 10px; }}
     .btn-menu:hover, .btn-menu.ativo {{ background: #d31a21; border-color: white; }}
-    .btn-menu img {{ width:24px; height:24px; object-fit:contain; }}
     .main-area {{ flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; }}
     .logo-central {{ width: 280px; max-width: 100%; height: auto; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }}
     .logo-peq {{ width: 180px; max-width: 100%; height: auto; margin-bottom: 10px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5)); }}
@@ -86,8 +85,8 @@ CSS = f"""
     .prod-card {{ border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s; color: white; border-width: 2px; border-style: solid; }}
     .prod-card:hover {{ transform: scale(1.05); border-color: white; }}
     .bg-green {{ background: linear-gradient(180deg, #28a745 0%, #1e7e34 100%); border-color: #145523; }}
-    .bg-red {{ background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border-color: #5a0407; opacity: 0.8; }}
-    .prod-card b {{ font-size: 14px; margin-bottom: 8px; text-shadow: 1px 1px 2px rgba(0,0,0,0.6); }}
+    .bg-red {{ background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border-color: #5a0407; opacity: 0.9; }}
+    .prod-card b {{ font-size: 14px; margin-bottom: 8px; text-shadow: 1px 1px 2px rgba(0,0,0,0.6); line-height: 1.2; }}
     .prod-card span {{ font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 5px; }}
     .comanda-lateral {{ width: 340px; background: white; color: black; border-left: 5px solid #d31a21; display: flex; flex-direction: column; }}
     .comanda-header {{ background: #d31a21; color: white; padding: 15px; font-weight: bold; text-align: center; font-size: 18px; }}
@@ -112,7 +111,7 @@ CSS = f"""
         body {{ height: auto; overflow: auto; }}
         .layout-vendas {{ display: flex; flex-direction: column; height: auto; min-height: 100vh; }}
         .menu-lateral {{ width: 100%; flex-direction: row; overflow-x: auto; padding: 10px; border-right: none; border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; gap: 8px; flex-shrink: 0; white-space: nowrap; -webkit-overflow-scrolling: touch; }}
-        .btn-menu {{ padding: 10px 15px; font-size: 14px; text-align: center; flex: 0 0 auto; justify-content: center; }}
+        .btn-menu {{ padding: 10px 15px; font-size: 14px; text-align: center; flex: 0 0 auto; justify-content: center; flex-direction: column; }}
         .main-area {{ display: flex; overflow: visible; padding: 15px; flex-shrink: 0; width: 100%; }}
         .grid-produtos {{ grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }}
         .prod-card {{ min-height: 110px; padding: 10px; }}
@@ -170,11 +169,15 @@ async def cardapio_digital():
         for cat in IMAGENS_CAT.keys():
             prods = conn.execute(text("SELECT nome, preco, estoque FROM produtos WHERE categoria=:c ORDER BY nome"), {"c": cat}).fetchall()
             if not prods: continue
+            
+            # Aqui está o fundo branco blindado pra imagem não sumir
             html_cats += f"""
                 <div style='text-align:center; margin-top:40px;'>
-                    <img src='{IMAGENS_CAT.get(cat, "")}' style='width: 80px; height: 80px; object-fit: contain; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5));'>
+                    <div style='background:white; border-radius:50%; width:110px; height:110px; display:inline-flex; align-items:center; justify-content:center; margin:auto; box-shadow:0 4px 10px rgba(0,0,0,0.5); border: 4px solid #d31a21;'>
+                        <img src='{IMAGENS_CAT.get(cat, "")}' style='width: 70px; height: 70px; object-fit: contain;'>
+                    </div>
                     <br>
-                    <h2 style='color:#f1c40f; border-bottom: 2px solid #d31a21; display:inline-block; padding-bottom:5px; margin-top:0;'>{cat}</h2>
+                    <h2 style='color:#f1c40f; border-bottom: 2px solid #d31a21; display:inline-block; padding-bottom:5px; margin-top:15px;'>{cat}</h2>
                 </div>
                 <div class='grid-produtos' style='justify-content:center; max-width:800px; margin:auto;'>
             """
@@ -182,7 +185,7 @@ async def cardapio_digital():
                 if p.estoque > 0:
                     html_cats += f"<div class='prod-card' style='background:#2c2c2c; border:1px solid #444; cursor:default;'><b style='font-size:16px;'>{p.nome}</b><span style='color:#f1c40f; font-size:18px;'>R$ {float(p.preco):.2f}</span></div>"
                 else:
-                    html_cats += f"<div class='prod-card' style='background:#1a1a1a; border:1px solid #d31a21; opacity:0.5; cursor:default;'><b style='font-size:16px;'><del>{p.nome}</del></b><span style='background:#d31a21; color:white; font-size:14px;'>ESGOTADO</span></div>"
+                    html_cats += f"<div class='prod-card' style='background:#1a1a1a; border:1px solid #d31a21; opacity:0.5; cursor:default;'><b style='font-size:16px;'><del>{p.nome}</del></b><span style='background:#d31a21; color:white; font-size:14px; font-weight:bold; margin-top:5px; padding:2px;'>⚠️ ESGOTADO</span></div>"
             html_cats += "</div>"
     return f"""<html><head>{CSS}</head><body style='background:#1a1a1a; overflow-y:auto;'><div style='padding:30px; width:100%;'>{IMG_LOGO}<h1 style='text-align:center; color:white; margin:bottom:0;'>CARDÁPIO DIGITAL</h1>{html_cats}<br><br><p style='text-align:center; color:#666;'>© Quiosque Brahma</p></div></body></html>"""
 
@@ -385,15 +388,29 @@ async def vendas(request: Request, cat: str = "CHOPP", p: str = ""):
     prods, itens_html = "", ""
     with engine.connect() as conn:
         for n, v, e in conn.execute(text("SELECT nome, preco, estoque FROM produtos WHERE categoria = :c ORDER BY nome"), {"c": cat}).fetchall():
-            cor = 'bg-green' if e > 0 else 'bg-red'
-            prods += f"<div class='prod-card {cor}' onclick='add(\"{n}\", {float(v or 0)}, {int(e or 0)})'><b>{n}</b><span>R$ {float(v or 0):.2f}</span></div>"
+            estoque_atual = int(e or 0)
+            
+            # Verificação Blindada de Estoque: Aparece Vermelho e Esgotado se for <= 0
+            if estoque_atual > 0:
+                cor = 'bg-green'
+                txt_estoque = f"<div style='font-size:12px; margin-top:5px; background:rgba(0,0,0,0.4); border-radius:4px; padding:2px;'>📦 Estoque: {estoque_atual}</div>"
+            else:
+                cor = 'bg-red'
+                txt_estoque = f"<div style='font-size:12px; margin-top:5px; background:#5a0407; border-radius:4px; padding:2px; font-weight:bold; color:#ffbaba;'>⚠️ ESGOTADO</div>"
+            
+            prods += f"<div class='prod-card {cor}' onclick='add(\"{n}\", {float(v or 0)}, {estoque_atual})'><b>{n}</b><span>R$ {float(v or 0):.2f}</span>{txt_estoque}</div>"
+            
         if p:
             role = request.session.get("role")
             for r in conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall():
                 btn_estorno = f"<form action='/estorno' method='post' style='display:inline; margin:0;'><input type='hidden' name='p' value='{p}'><input type='hidden' name='i' value='{r.item_nome}'><button style='background:none;border:none;color:#d31a21;font-weight:bold;cursor:pointer;margin-left:8px;font-size:16px;' title='Estornar 1x'>✖</button></form>" if role in ['admin', 'gerente'] else ""
                 itens_html += f"<div class='item-linha'><span style='display:flex;align-items:center;'>{r.qtd}x {r.item_nome} {btn_estorno}</span><span>R$ {float(r.tot or 0):.2f}</span></div>"
+    
     comanda_display = f"""<div class='comanda-header'><div style='font-size:13px;'>PULSEIRA:</div><input type='number' id='input-pulseira' class='input-padrao' style='text-align:center; font-weight:bold; font-size:20px;' value='{p}'><button class='btn-acao' style='background:white; color:#d31a21;' onclick='window.location.href=\"/vendas?cat={cat}&p=\"+document.getElementById(\"input-pulseira\").value'>ACESSAR</button></div><div class='comanda-body'><div class='secao-titulo'>Consumo</div>{itens_html}<hr><div class='secao-titulo'>Novo Pedido</div><div id='novo-pedido'></div></div><div class='comanda-footer'><div style='display:flex; justify-content:space-between; font-weight:bold;'><span>Subtotal:</span><span id='tot-pedido'>R$ 0.00</span></div><br><button class='btn-acao' style='background:#28a745;' onclick='enviarPedido()'>LANÇAR PEDIDO</button><a href='/central' class='btn-acao' style='background:#333'>Voltar</a></div>"""
-    botoes_menu = "".join([f"<a href='/vendas?cat={k}&p={p}' class='btn-menu'><img src='{IMAGENS_CAT.get(k, '')}'> {k}</a>" for k in IMAGENS_CAT.keys()])
+    
+    # Adicionando um fundo branco redondo atrás dos ícones laterais para não sumirem
+    botoes_menu = "".join([f"<a href='/vendas?cat={k}&p={p}' class='btn-menu'><span style='background:white; border-radius:50%; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; box-shadow: 0 2px 4px rgba(0,0,0,0.5);'><img src='{IMAGENS_CAT.get(k, '')}' style='width:20px; height:20px; object-fit:contain;'></span> {k}</a>" for k in IMAGENS_CAT.keys()])
+    
     return f"""<html><head>{CSS}<script>const p_num = '{p}'; let cart = JSON.parse(sessionStorage.getItem('cart_'+p_num)) || []; function add(n,v,e) {{ if(!p_num) return alert('Acesse uma pulseira!'); if (e <= 0 || cart.filter(x => x.n === n).length >= e) return alert('❌ Sem estoque!'); cart.push({{n,v}}); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function render() {{ let html = ''; let t = 0; cart.forEach((i,idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:black;'>X</b></span></div>`; t += i.v; }}); document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = 'R$ '+t.toFixed(2); }} function rem(idx) {{ cart.splice(idx,1); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function enviarPedido() {{ if(!p_num || cart.length === 0) return; let f = document.createElement('form'); f.method = 'POST'; f.action = '/lancar_pedido'; let i1 = document.createElement('input'); i1.name = 'p'; i1.value = p_num; f.appendChild(i1); let i2 = document.createElement('input'); i2.name = 'itens'; i2.value = JSON.stringify(cart); f.appendChild(i2); document.body.appendChild(f); sessionStorage.removeItem('cart_'+p_num); f.submit(); }} window.onload = render;</script></head><body><div class='layout-vendas'><div class='menu-lateral'>{botoes_menu}</div><div class='main-area'>{IMG_LOGO}<h2>{cat}</h2><div class='grid-produtos'>{prods}</div></div><div class='comanda-lateral'>{comanda_display}</div></div></body></html>"""
 
 @app.post("/estorno")

@@ -14,10 +14,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:GNlZnHiuKAcFnpgX
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 MENU_INICIAL = {
-    "CHOPP": [("Caneca 350ml", 11.9), ("Tulipa 700ml", 17.9), ("Torre 2.5L", 84.9)],
-    "CERVEJAS": [("Cerveja 600ml Padrão", 12.9), ("Cerveja Long Neck", 9.9), ("Cerveja Zero", 10.0), ("Cerveja Artesanal IPA", 16.9)],
-    "PETISCOS": [("Porção de Fritas", 21.9), ("Fritas c/ Cheddar e Bacon", 27.9), ("Frango a Passarinho", 28.9), ("Tábua de Frios", 34.9)],
-    "BEBIDAS": [("Caipirinha de Limão", 14.9), ("Gin Tônica", 24.9), ("Refrigerante Lata", 5.0), ("Suco Natural", 7.0), ("Água Mineral", 4.0)]
+    "CHOPP": [("Caneca 350ml", 11.9), ("Descartável 500ml", 13.9), ("Tulipa 700ml", 17.9), ("Torre 2.5L", 84.9), ("Torre 3.5L", 99.9)],
+    "CERVEJAS": [("Original 600ml", 12.9), ("Amstel 600ml", 12.0), ("Brahma Duplo Malte", 12.0), ("Heineken 600ml", 16.9), ("Spaten LN", 8.9), ("Corona LN", 10.0), ("Heineken LN", 10.0), ("Stella LN", 8.9), ("Heineken Zero", 10.0)],
+    "PETISCOS": [("Fritas", 21.9), ("Fritas c/ Queijo", 25.9), ("Fritas Cheddar/Bacon", 27.9), ("Kibe 10un", 34.9), ("Kibe c/ Queijo", 37.9), ("Frango Passarinho", 28.9), ("Carne Sol c/ Fritas", 54.9), ("Calabresa Acebolada", 22.9), ("Tábua Frios", 34.9)],
+    "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]
 }
 
 IMAGENS_CAT = {
@@ -31,23 +31,23 @@ IMAGENS_CAT = {
 with engine.begin() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS clientes (id SERIAL PRIMARY KEY, nome_completo TEXT NOT NULL, cpf TEXT UNIQUE NOT NULL, data_nascimento DATE, contato TEXT, email TEXT);
-        CREATE TABLE IF NOT EXISTS comandas (id SERIAL PRIMARY KEY, numero_comanda TEXT NOT NULL, cliente_cpf TEXT REFERENCES clientes(cpf), total_conta DECIMAL(10,2) DEFAULT 0.00, status TEXT DEFAULT 'ABERTA', forma_pagamento TEXT, data_fechamento TIMESTAMP, nfe_solicitada BOOLEAN DEFAULT FALSE, cpf_nota TEXT, desconto DECIMAL(10,2) DEFAULT 0.00);
-        CREATE TABLE IF NOT EXISTS vendas_itens (id SERIAL PRIMARY KEY, comanda_num TEXT, item_nome TEXT, valor DECIMAL(10,2), data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME, status TEXT DEFAULT 'ABERTA', garcom TEXT, comissao_status TEXT DEFAULT 'PENDENTE');
+        CREATE TABLE IF NOT EXISTS pulseiras (id SERIAL PRIMARY KEY, numero_pulseira TEXT NOT NULL, cliente_cpf TEXT REFERENCES clientes(cpf), total_conta DECIMAL(10,2) DEFAULT 0.00, status TEXT DEFAULT 'ABERTA', forma_pagamento TEXT, data_fechamento TIMESTAMP, nfe_solicitada BOOLEAN DEFAULT FALSE, cpf_nota TEXT);
+        CREATE TABLE IF NOT EXISTS vendas_itens (id SERIAL PRIMARY KEY, pulseira_num TEXT, item_nome TEXT, valor DECIMAL(10,2), data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME, status TEXT DEFAULT 'ABERTA', garcom TEXT, comissao_status TEXT DEFAULT 'PENDENTE');
         CREATE TABLE IF NOT EXISTS produtos (id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL, categoria TEXT DEFAULT 'OUTROS', preco DECIMAL(10,2) DEFAULT 0.00, estoque INT DEFAULT 0);
         CREATE TABLE IF NOT EXISTS fila_impressao (id SERIAL PRIMARY KEY, conteudo TEXT, status TEXT DEFAULT 'PENDENTE', data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
         CREATE TABLE IF NOT EXISTS historico_estoque (id SERIAL PRIMARY KEY, produto_nome TEXT, qtd_adicionada INT, data_entrada DATE DEFAULT CURRENT_DATE);
         CREATE TABLE IF NOT EXISTS usuarios (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS caixa_movimentos (id SERIAL PRIMARY KEY, tipo TEXT, valor DECIMAL(10,2), descricao TEXT, data_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP, usuario TEXT);
-        CREATE TABLE IF NOT EXISTS turnos (id SERIAL PRIMARY KEY, data_abertura TIMESTAMP DEFAULT CURRENT_TIMESTAMP, data_fechamento TIMESTAMP, fundo_inicial DECIMAL(10,2) DEFAULT 0.00, status TEXT DEFAULT 'ABERTO', usuario_abertura TEXT, usuario_fechamento TEXT);
     """))
 
 MIGRACOES = [
-    "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS nfe_solicitada BOOLEAN DEFAULT FALSE;",
-    "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS cpf_nota TEXT;",
-    "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
-    "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS forma_pagamento TEXT;",
-    "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS data_fechamento TIMESTAMP;",
-    "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS desconto DECIMAL(10,2) DEFAULT 0.00;",
+    "CREATE TABLE IF NOT EXISTS turnos (id SERIAL PRIMARY KEY, data_abertura TIMESTAMP DEFAULT CURRENT_TIMESTAMP, data_fechamento TIMESTAMP, fundo_inicial DECIMAL(10,2) DEFAULT 0.00, status TEXT DEFAULT 'ABERTO', usuario_abertura TEXT, usuario_fechamento TEXT);",
+    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS nfe_solicitada BOOLEAN DEFAULT FALSE;",
+    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS cpf_nota TEXT;",
+    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
+    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS forma_pagamento TEXT;",
+    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS data_fechamento TIMESTAMP;",
+    "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS desconto DECIMAL(10,2) DEFAULT 0.00;",
     "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS comissao_status TEXT DEFAULT 'PENDENTE';",
     "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'OUTROS';",
     "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco DECIMAL(10,2) DEFAULT 0.00;",
@@ -171,31 +171,29 @@ async def central(request: Request):
         
     b = ""
     if not turno_aberto:
-        b += f"<div style='background:#fef3c7; border:2px dashed #e67e22; padding:15px; border-radius:8px; margin-bottom:15px; color:#d31a21; font-weight:bold;'>⚠️ O CAIXA/EVENTO ESTÁ FECHADO!</div>"
-        if role in ["admin", "gerente", "caixa"]:
-            b += f"<a href='/caixa' class='btn-acao' style='background:#28a745; padding:20px; font-size:18px;'>🟢 INICIAR EVENTO (ABRIR CAIXA)</a>"
+        b += f"""
+        <div style='background:#f4f4f4; padding:25px; border-radius:10px; border:3px dashed #d31a21; margin-bottom:20px;'>
+            <h3 style='color:#d31a21; margin-top:0; font-size:22px;'>⚠️ O EVENTO / CAIXA ESTÁ FECHADO</h3>
+            <p style='color:#333; font-weight:bold; margin-bottom:15px;'>Para acessar as vendas e comandas, abra o evento abaixo:</p>
+            <form action='/abrir_turno' method='post' style='margin:0;'>
+                <label style='font-weight:bold; color:#062b5e; display:block; text-align:left;'>Fundo de Caixa (R$):</label>
+                <input type='number' step='0.01' name='fundo_inicial' class='input-padrao' required placeholder='0.00' inputmode='numeric' style='font-size:24px; font-weight:bold; text-align:center;'>
+                <button class='btn-acao' style='background:#28a745; font-size:20px; padding:20px; margin-top:15px;'>🟢 ABRIR EVENTO AGORA</button>
+            </form>
+        </div>
+        """
         if role in ["admin", "gerente"]:
             b += "<a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#062b5e'>📦 GESTÃO DE ESTOQUE</a>"
         if role == "admin":
             b += "<a href='/usuarios' class='btn-acao' style='background:#9b59b6'>👥 GERENCIAR USUÁRIOS</a>"
     else:
         if role in ["admin", "gerente", "garcom", "caixa", "portaria"]:
-            # Aqui entra a barra de acesso rápido da Comanda Topzeira
-            b += f"""
-            <div style='background:#f4f4f4; padding:15px; border-radius:8px; margin-bottom:15px; border:2px solid #ccc;'>
-                <h3 style='margin-top:0; color:#d31a21; margin-bottom:10px;'>Acesso Rápido - Comanda</h3>
-                <form action='/vendas' method='get' style='display:flex; gap:10px; margin:0;'>
-                    <input type='text' name='p' class='input-padrao' placeholder='Nº da Comanda' required style='margin:0; font-size:18px; font-weight:bold; text-align:center; flex:1;'>
-                    <button class='btn-acao' style='background:#28a745; margin:0; width:120px;'>ABRIR</button>
-                </form>
-            </div>
-            """
-            b += f"<a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CLIENTE / COMANDA</a><a href='/buscar' class='btn-acao' style='background:#062b5e'>🔍 BUSCAR COMANDA (AVANÇADO)</a>"
+            b += f"<a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO / COMANDA</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a>"
         if role in ["admin", "gerente", "garcom", "caixa"]:
-            b += f"<a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a><a href='/caixa' class='btn-acao' style='background:#e67e22'>💰 GESTÃO DO EVENTO (CAIXA)</a>"
+            b += f"<a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / LANÇAR ITENS</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a><a href='/caixa' class='btn-acao' style='background:#e67e22'>💰 GESTÃO DO EVENTO (CAIXA)</a>"
         if role in ["admin", "gerente"]:
             b += "<a href='/comissoes' class='btn-acao' style='background:#8e44ad'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#062b5e'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a>"
-            b += "<a href='/baixar_conector' class='btn-acao' style='background:#f39c12; color:black;'>📥 BAIXAR CONECTOR DE IMPRESSORA PC</a>"
+            b += "<a href='/baixar_conector' class='btn-acao' style='background:#f39c12; color:black;'>📥 BAIXAR CONECTOR DE IMPRESSORA</a>"
         if role == "admin":
             b += "<a href='/usuarios' class='btn-acao' style='background:#9b59b6'>👥 GERENCIAR USUÁRIOS</a>"
             
@@ -252,11 +250,10 @@ async def tela_caixa(request: Request):
     
     with engine.connect() as conn:
         turno = conn.execute(text("SELECT id, data_abertura, fundo_inicial FROM turnos WHERE status = 'ABERTO' ORDER BY id DESC LIMIT 1")).fetchone()
-        
         if not turno:
-            return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<div style='background:#f4f4f4; padding:20px; border-radius:10px; border:1px solid #ccc;'><h3 style='color:#d31a21; margin-top:0;'>Iniciar Evento (Abrir Caixa)</h3><form action='/abrir_turno' method='post'><label style='color:#333; font-weight:bold; display:block; text-align:left; margin-bottom:5px;'>Fundo de Caixa Inicial (Dinheiro na Gaveta):</label><input type='number' step='0.01' name='fundo_inicial' class='input-padrao' required placeholder='R$ 0.00' style='font-size:20px; font-weight:bold;'><button class='btn-acao' style='background:#28a745; margin-top:15px; font-size:18px;'>🟢 INICIAR EVENTO</button></form></div><br><a href='/central' style='color:gray'>Voltar ao Menu</a></div></div></body></html>"
+            return RedirectResponse(url="/central")
 
-        pag_q = conn.execute(text(f"SELECT forma_pagamento, SUM(total_conta) as total FROM comandas WHERE data_fechamento >= :inicio AND status = 'FECHADA' GROUP BY forma_pagamento"), {"inicio": turno.data_abertura}).fetchall()
+        pag_q = conn.execute(text(f"SELECT forma_pagamento, SUM(total_conta) as total FROM pulseiras WHERE data_fechamento >= :inicio AND status = 'FECHADA' GROUP BY forma_pagamento"), {"inicio": turno.data_abertura}).fetchall()
         totais = {"DINHEIRO": 0.0, "PIX": 0.0, "C. CREDITO": 0.0, "C. DEBITO": 0.0}
         for p in pag_q: totais[p.forma_pagamento] = float(p.total or 0)
         
@@ -301,7 +298,7 @@ async def resumo_whatsapp(request: Request):
         turno = conn.execute(text("SELECT id, data_abertura, fundo_inicial FROM turnos WHERE status = 'ABERTO' ORDER BY id DESC LIMIT 1")).fetchone()
         if not turno: return RedirectResponse(url="/caixa")
         
-        pag_q = conn.execute(text(f"SELECT forma_pagamento, SUM(total_conta) as total, SUM(desconto) as tot_desc FROM comandas WHERE data_fechamento >= :inicio AND status = 'FECHADA' GROUP BY forma_pagamento"), {"inicio": turno.data_abertura}).fetchall()
+        pag_q = conn.execute(text(f"SELECT forma_pagamento, SUM(total_conta) as total, SUM(desconto) as tot_desc FROM pulseiras WHERE data_fechamento >= :inicio AND status = 'FECHADA' GROUP BY forma_pagamento"), {"inicio": turno.data_abertura}).fetchall()
         totais = {"DINHEIRO": 0.0, "PIX": 0.0, "C. CREDITO": 0.0, "C. DEBITO": 0.0}
         tot_desconto = 0.0
         for p in pag_q: 
@@ -332,12 +329,12 @@ async def resumo_whatsapp(request: Request):
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str = "", prod: str = "", garcom_filtro: str = ""):
     if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
-    where_comanda, where_vendas, where_hist, where_prod = "status = 'FECHADA'", "status = 'FECHADA'", "1=1", "1=1"
+    where_pulseira, where_vendas, where_hist, where_prod = "status = 'FECHADA'", "status = 'FECHADA'", "1=1", "1=1"
     params_p, params_v, params_h = {}, {}, {}
     if inicio:
-        where_comanda += " AND CAST(data_fechamento AS DATE) >= CAST(:inicio AS DATE)"; where_vendas += " AND CAST(data_venda AS DATE) >= CAST(:inicio AS DATE)"; where_hist += " AND CAST(data_entrada AS DATE) >= CAST(:inicio AS DATE)"; params_p["inicio"] = params_v["inicio"] = params_h["inicio"] = inicio
+        where_pulseira += " AND CAST(data_fechamento AS DATE) >= CAST(:inicio AS DATE)"; where_vendas += " AND CAST(data_venda AS DATE) >= CAST(:inicio AS DATE)"; where_hist += " AND CAST(data_entrada AS DATE) >= CAST(:inicio AS DATE)"; params_p["inicio"] = params_v["inicio"] = params_h["inicio"] = inicio
     if fim:
-        where_comanda += " AND CAST(data_fechamento AS DATE) <= CAST(:fim AS DATE)"; where_vendas += " AND CAST(data_venda AS DATE) <= CAST(:fim AS DATE)"; where_hist += " AND CAST(data_entrada AS DATE) <= CAST(:fim AS DATE)"; params_p["fim"] = params_v["fim"] = params_h["fim"] = fim
+        where_pulseira += " AND CAST(data_fechamento AS DATE) <= CAST(:fim AS DATE)"; where_vendas += " AND CAST(data_venda AS DATE) <= CAST(:fim AS DATE)"; where_hist += " AND CAST(data_entrada AS DATE) <= CAST(:fim AS DATE)"; params_p["fim"] = params_v["fim"] = params_h["fim"] = fim
     
     if garcom_filtro:
         where_vendas += " AND vendas_itens.garcom = :g_filtro"
@@ -360,11 +357,11 @@ async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str 
         garcons_lista = conn.execute(text("SELECT DISTINCT garcom FROM vendas_itens WHERE garcom IS NOT NULL")).fetchall()
         opcoes_garcom = "".join([f"<option value='{g.garcom}' {'selected' if garcom_filtro == g.garcom else ''}>{g.garcom}</option>" for g in garcons_lista])
         
-        kpi = conn.execute(text(f"SELECT SUM(total_conta) as total, AVG(total_conta) as media FROM comandas WHERE {where_comanda}"), params_p).fetchone()
+        kpi = conn.execute(text(f"SELECT SUM(total_conta) as total, AVG(total_conta) as media FROM pulseiras WHERE {where_pulseira}"), params_p).fetchone()
         faturamento_bruto = float(kpi.total or 0); ticket_medio = float(kpi.media or 0)
         comissao_db = conn.execute(text(f"SELECT SUM(valor * 0.10) as comissao_total FROM vendas_itens {join_vendas} WHERE {where_vendas} AND comissao_status = 'PAGA'"), params_v).fetchone()
         comissoes_pagas = float(comissao_db.comissao_total or 0); faturamento_liquido = faturamento_bruto - comissoes_pagas
-        pagamentos = conn.execute(text(f"SELECT forma_pagamento, COUNT(*) as qtd FROM comandas WHERE {where_comanda} GROUP BY forma_pagamento"), params_p).fetchall()
+        pagamentos = conn.execute(text(f"SELECT forma_pagamento, COUNT(*) as qtd FROM pulseiras WHERE {where_pulseira} GROUP BY forma_pagamento"), params_p).fetchall()
         labels_pag, data_pag = [r.forma_pagamento or "N/D" for r in pagamentos], [r.qtd for r in pagamentos]
         
         top_qtd_db = conn.execute(text(f"SELECT item_nome, COUNT(*) as qtd FROM vendas_itens {join_vendas} WHERE {where_vendas} GROUP BY item_nome ORDER BY qtd DESC LIMIT 3"), params_v).fetchall()
@@ -420,10 +417,26 @@ async def tela_estoque(request: Request):
         prods_db = conn.execute(text("SELECT p.id, p.nome, p.categoria, p.preco, p.estoque, MAX(h.data_entrada) as ultima_compra FROM produtos p LEFT JOIN historico_estoque h ON p.nome = h.produto_nome GROUP BY p.id, p.nome, p.categoria, p.preco, p.estoque ORDER BY p.categoria, p.nome")).fetchall()
         for r in prods_db:
             if r.categoria != curr_cat: linhas += f"<tr><td colspan='5' style='background:#082d5e; color:white; font-weight:bold; text-align:center;'>{r.categoria or 'OUTROS'}</td></tr>"; curr_cat = r.categoria
-            acoes = f"<div style='display:flex; gap:5px;'><form action='/att_estoque' method='post' style='margin:0; display:flex;'><input type='hidden' name='i' value='{r.nome}'><input type='number' name='q' class='input-padrao' style='width:50px; padding:5px;' required><button class='btn-acao' style='background:#28a745; padding:8px;'>➕</button></form><form action='/excluir_produto' method='post' style='margin:0;' onsubmit='return confirm(\"Excluir?\");'><input type='hidden' name='nome' value='{r.nome}'><button class='btn-acao' style='background:#d31a21; padding:8px;'>🗑️</button></form></div>"
+            acoes = f"""
+            <div style='display:flex; gap:5px;'>
+                <form action='/att_estoque' method='post' style='margin:0; display:flex;'>
+                    <input type='hidden' name='i' value='{r.nome}'>
+                    <input type='number' name='q' class='input-padrao' style='width:50px; padding:5px; margin:0;' required title='Adicionar Qtd'>
+                    <button class='btn-acao' style='background:#28a745; padding:8px; margin:0;'>➕</button>
+                </form>
+                <form action='/editar_preco' method='post' style='margin:0; display:flex;'>
+                    <input type='hidden' name='nome' value='{r.nome}'>
+                    <input type='number' step='0.01' name='novo_preco' class='input-padrao' style='width:60px; padding:5px; margin:0;' required placeholder='Preço'>
+                    <button class='btn-acao' style='background:#f39c12; padding:8px; margin:0;' title='Editar Preço'>✏️</button>
+                </form>
+                <form action='/excluir_produto' method='post' style='margin:0;' onsubmit='return confirm(\"Excluir item definitivamente?\");'>
+                    <input type='hidden' name='nome' value='{r.nome}'>
+                    <button class='btn-acao' style='background:#d31a21; padding:8px; margin:0;'>🗑️</button>
+                </form>
+            </div>"""
             linhas += f"<tr><td style='color:#d31a21;'>{r.id:03d}</td><td style='color:#333;'>{r.nome} <br><small>R$ {float(r.preco or 0):.2f}</small></td><td style='color:#062b5e; font-size:12px;'>{(r.ultima_compra.strftime('%d/%m/%Y') if r.ultima_compra else 'N/A')}</td><td style='color:#333; font-weight:bold; font-size:18px;'>{int(r.estoque or 0)}</td><td>{acoes}</td></tr>"
     add_form = f"<div style='background:#f4f4f4; padding:20px; border-radius:10px; margin-bottom:20px; text-align:left; border:1px solid #ccc;'><h3 style='margin-top:0; color:#d31a21;'>➕ NOVO PRODUTO</h3><form action='/novo_produto' method='post' style='display:flex; flex-wrap:wrap; gap:10px;'><input name='nome' placeholder='Produto' class='input-padrao' style='flex:1;' required><select name='cat' class='input-padrao' style='flex:1;' required><option value='CHOPP'>CHOPP</option><option value='CERVEJAS'>CERVEJAS</option><option value='PETISCOS'>PETISCOS</option><option value='BEBIDAS'>BEBIDAS</option><option value='OUTROS'>OUTROS</option></select><input name='preco' placeholder='Preço' class='input-padrao' style='width:80px;' required><input name='qtd' type='number' placeholder='Qtd' class='input-padrao' style='width:80px;' required><button class='btn-acao' style='background:#062b5e; width:100%;'>SALVAR</button></form></div>"
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><h2>Estoque</h2>{add_form}<div style='max-height:400px; overflow-y:auto; border:1px solid #ccc;'><table><tr><th style='color:#333'>Cód</th><th style='color:#333'>Item</th><th style='color:#333'>Compra</th><th style='color:#333'>Qtd</th><th style='color:#333'>Ação</th></tr>{linhas}</table></div><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center' style='max-width:900px;'><h2>Estoque</h2>{add_form}<div style='max-height:400px; overflow-y:auto; border:1px solid #ccc;'><table><tr><th style='color:#333'>Cód</th><th style='color:#333'>Item</th><th style='color:#333'>Compra</th><th style='color:#333'>Qtd</th><th style='color:#333'>Ações Rápidas (Add / Editar / Excluir)</th></tr>{linhas}</table></div><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
 
 @app.post("/novo_produto")
 async def novo_produto(request: Request):
@@ -442,6 +455,16 @@ async def att_estoque(request: Request):
         with engine.begin() as conn: 
             conn.execute(text("UPDATE produtos SET estoque = COALESCE(estoque, 0) + :q WHERE nome = :i"), {"i": f.get("i"), "q": int(f.get("q", "0"))})
             conn.execute(text("INSERT INTO historico_estoque (produto_nome, qtd_adicionada) VALUES (:i, :q)"), {"i": f.get("i"), "q": int(f.get("q", "0"))})
+    except: pass
+    return RedirectResponse(url="/estoque", status_code=303)
+
+@app.post("/editar_preco")
+async def editar_preco(request: Request):
+    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    f = await request.form()
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE produtos SET preco = :p WHERE nome = :n"), {"p": float(f.get("novo_preco", "0").replace(",", ".")), "n": f.get("nome")})
     except: pass
     return RedirectResponse(url="/estoque", status_code=303)
 
@@ -530,12 +553,12 @@ async def vendas(request: Request, cat: str = "CHOPP", p: str = ""):
             prods += f"<div class='prod-card {cor}' onclick='add(\"{n}\", {float(v or 0)}, {estoque_atual})'><b>{n}</b><span>R$ {float(v or 0):.2f}</span>{txt_estoque}</div>"
         if p:
             role = request.session.get("role")
-            for r in conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE comanda_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall():
+            for r in conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall():
                 btn_estorno = f"<form action='/estorno' method='post' style='display:inline; margin:0;'><input type='hidden' name='p' value='{p}'><input type='hidden' name='i' value='{r.item_nome}'><button style='background:none;border:none;color:#d31a21;font-weight:bold;cursor:pointer;margin-left:8px;font-size:16px;' title='Estornar 1x'>✖</button></form>" if role in ['admin', 'gerente'] else ""
                 itens_html += f"<div class='item-linha'><span style='display:flex;align-items:center;'>{r.qtd}x {r.item_nome} {btn_estorno}</span><span>R$ {float(r.tot or 0):.2f}</span></div>"
-    comanda_display = f"""<div class='comanda-header'><div style='font-size:13px;'>MESA / COMANDA:</div><input type='text' id='input-comanda' class='input-padrao' style='text-align:center; font-weight:bold; font-size:20px;' value='{p}'><button class='btn-acao' style='background:white; color:#d31a21;' onclick='window.location.href=\"/vendas?cat={cat}&p=\"+document.getElementById(\"input-comanda\").value'>ACESSAR</button></div><div class='comanda-body'><div class='secao-titulo'>Consumo</div>{itens_html}<hr><div class='secao-titulo'>Novo Pedido</div><div id='novo-pedido'></div></div><div class='comanda-footer'><div style='display:flex; justify-content:space-between; font-weight:bold;'><span>Subtotal:</span><span id='tot-pedido'>R$ 0.00</span></div><br><button class='btn-acao' style='background:#28a745;' onclick='enviarPedido()'>LANÇAR PEDIDO</button><a href='/central' class='btn-acao' style='background:#333'>Voltar</a></div>"""
+    comanda_display = f"""<div class='comanda-header'><div style='font-size:13px;'>MESA / COMANDA:</div><input type='number' inputmode='numeric' pattern='[0-9]*' id='input-pulseira' class='input-padrao' style='text-align:center; font-weight:bold; font-size:20px;' value='{p}'><button class='btn-acao' style='background:white; color:#d31a21;' onclick='window.location.href=\"/vendas?cat={cat}&p=\"+document.getElementById(\"input-pulseira\").value'>ACESSAR</button></div><div class='comanda-body'><div class='secao-titulo'>Consumo</div>{itens_html}<hr><div class='secao-titulo'>Novo Pedido</div><div id='novo-pedido'></div></div><div class='comanda-footer'><div style='display:flex; justify-content:space-between; font-weight:bold;'><span>Subtotal:</span><span id='tot-pedido'>R$ 0.00</span></div><br><button class='btn-acao' style='background:#28a745;' onclick='enviarPedido()'>LANÇAR PEDIDO</button><a href='/central' class='btn-acao' style='background:#333'>Voltar</a></div>"""
     botoes_menu = "".join([f"<a href='/vendas?cat={k}&p={p}' class='btn-menu'><span style='background:white; border-radius:50%; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; box-shadow: 0 2px 4px rgba(0,0,0,0.5);'><img src='{IMAGENS_CAT.get(k, '')}' style='width:20px; height:20px; object-fit:contain;'></span> {k}</a>" for k in IMAGENS_CAT.keys()])
-    return f"""<html><head>{CSS}<script>const c_num = '{p}'; let cart = JSON.parse(sessionStorage.getItem('cart_'+c_num)) || []; function add(n,v,e) {{ if(!c_num) return alert('Acesse uma comanda ou mesa!'); if (e <= 0 || cart.filter(x => x.n === n).length >= e) return alert('❌ Sem estoque!'); cart.push({{n,v}}); sessionStorage.setItem('cart_'+c_num, JSON.stringify(cart)); render(); }} function render() {{ let html = ''; let t = 0; cart.forEach((i,idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:#333;'>X</b></span></div>`; t += i.v; }}); document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = 'R$ '+t.toFixed(2); }} function rem(idx) {{ cart.splice(idx,1); sessionStorage.setItem('cart_'+c_num, JSON.stringify(cart)); render(); }} function enviarPedido() {{ if(!c_num || cart.length === 0) return; let f = document.createElement('form'); f.method = 'POST'; f.action = '/lancar_pedido'; let i1 = document.createElement('input'); i1.name = 'p'; i1.value = c_num; f.appendChild(i1); let i2 = document.createElement('input'); i2.name = 'itens'; i2.value = JSON.stringify(cart); f.appendChild(i2); document.body.appendChild(f); sessionStorage.removeItem('cart_'+c_num); f.submit(); }} window.onload = render;</script></head><body><div class='layout-vendas'><div class='menu-lateral'>{botoes_menu}</div><div class='main-area'>{IMG_LOGO}<h2>{cat}</h2><div class='grid-produtos'>{prods}</div></div><div class='comanda-lateral'>{comanda_display}</div></div></body></html>"""
+    return f"""<html><head>{CSS}<script>const p_num = '{p}'; let cart = JSON.parse(sessionStorage.getItem('cart_'+p_num)) || []; function add(n,v,e) {{ if(!p_num) return alert('Acesse uma comanda ou mesa!'); if (e <= 0 || cart.filter(x => x.n === n).length >= e) return alert('❌ Sem estoque!'); cart.push({{n,v}}); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function render() {{ let html = ''; let t = 0; cart.forEach((i,idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:#333;'>X</b></span></div>`; t += i.v; }}); document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = 'R$ '+t.toFixed(2); }} function rem(idx) {{ cart.splice(idx,1); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function enviarPedido() {{ if(!p_num || cart.length === 0) return; let f = document.createElement('form'); f.method = 'POST'; f.action = '/lancar_pedido'; let i1 = document.createElement('input'); i1.name = 'p'; i1.value = p_num; f.appendChild(i1); let i2 = document.createElement('input'); i2.name = 'itens'; i2.value = JSON.stringify(cart); f.appendChild(i2); document.body.appendChild(f); sessionStorage.removeItem('cart_'+p_num); f.submit(); }} window.onload = render;</script></head><body><div class='layout-vendas'><div class='menu-lateral'>{botoes_menu}</div><div class='main-area'>{IMG_LOGO}<h2>{cat}</h2><div class='grid-produtos'>{prods}</div></div><div class='comanda-lateral'>{comanda_display}</div></div></body></html>"""
 
 @app.post("/estorno")
 async def estornar_item(request: Request):
@@ -544,10 +567,10 @@ async def estornar_item(request: Request):
     p, i = f.get("p"), f.get("i")
     try:
         with engine.begin() as conn:
-            item = conn.execute(text("SELECT id, valor FROM vendas_itens WHERE comanda_num=:p AND item_nome=:i AND status='ABERTA' LIMIT 1"), {"p": p, "i": i}).fetchone()
+            item = conn.execute(text("SELECT id, valor FROM vendas_itens WHERE pulseira_num=:p AND item_nome=:i AND status='ABERTA' LIMIT 1"), {"p": p, "i": i}).fetchone()
             if item:
                 conn.execute(text("UPDATE vendas_itens SET status='ESTORNADO' WHERE id=:id"), {"id": item.id})
-                conn.execute(text("UPDATE comandas SET total_conta = total_conta - :v WHERE numero_comanda=:p AND status='ABERTA'"), {"v": item.valor, "p": p})
+                conn.execute(text("UPDATE pulseiras SET total_conta = total_conta - :v WHERE numero_pulseira=:p AND status='ABERTA'"), {"v": item.valor, "p": p})
                 conn.execute(text("UPDATE produtos SET estoque = estoque + 1 WHERE nome=:n"), {"n": i})
     except: pass
     return RedirectResponse(url=f"/vendas?p={p}", status_code=303)
@@ -559,10 +582,10 @@ async def lancar_pedido(request: Request):
     tot = sum(i['v'] for i in itens)
     try:
         with engine.begin() as conn:
-            conn.execute(text("UPDATE comandas SET total_conta = total_conta + :t WHERE numero_comanda = :p AND status = 'ABERTA'"), {"t": tot, "p": p})
+            conn.execute(text("UPDATE pulseiras SET total_conta = total_conta + :t WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"t": tot, "p": p})
             txt = f"--------------------------------\n      TICKET DE PREPARO\nSISTEMA JPMS\nCOMANDA/MESA: {p}\nATENDENTE: {u}\n--------------------------------\n"
             for i in itens:
-                conn.execute(text("INSERT INTO vendas_itens (comanda_num, item_nome, valor, garcom) VALUES (:p, :n, :v, :g)"), {"p": p, "n": i['n'], "v": i['v'], "g": u})
+                conn.execute(text("INSERT INTO vendas_itens (pulseira_num, item_nome, valor, garcom) VALUES (:p, :n, :v, :g)"), {"p": p, "n": i['n'], "v": i['v'], "g": u})
                 conn.execute(text("UPDATE produtos SET estoque = GREATEST(estoque - 1, 0) WHERE nome = :n"), {"n": i['n']})
                 txt += f"1x {i['n']} - R$ {i['v']:.2f}\n"
             txt += "--------------------------------\n"
@@ -579,9 +602,9 @@ async def fechar_conta(request: Request, q: str = ""):
             return HTMLResponse("<script>alert('O Evento está fechado! Inicie o evento no menu principal primeiro.'); window.location.href='/central';</script>")
             
         if q:
-            query = conn.execute(text("SELECT p.numero_comanda, p.total_conta, c.nome_completo, c.cpf FROM comandas p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE (p.numero_comanda = :q OR c.cpf = :q) AND p.status = 'ABERTA'"), {"q": q.strip()}).fetchone()
+            query = conn.execute(text("SELECT p.numero_pulseira, p.total_conta, c.nome_completo, c.cpf FROM pulseiras p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE (p.numero_pulseira = :q OR c.cpf = :q) AND p.status = 'ABERTA'"), {"q": q.strip()}).fetchone()
             if query:
-                itens_q = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE comanda_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": query.numero_comanda}).fetchall()
+                itens_q = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": query.numero_pulseira}).fetchall()
                 lista = "".join([f"<div class='item-linha'><span>{i.qtd}x {i.item_nome}</span><span>R$ {float(i.tot or 0):.2f}</span></div>" for i in itens_q])
                 subt = float(query.total_conta or 0)
                 taxa = subt * 0.10
@@ -590,7 +613,7 @@ async def fechar_conta(request: Request, q: str = ""):
                 <div style='background:#ffeaa7; padding:15px; border-radius:8px; margin-top:15px; border:1px solid #fdcb6e;'>
                     <h4 style='margin-top:0; color:#d35400; border-bottom:1px solid #fdcb6e; padding-bottom:5px;'>💸 Pagamento Parcial (Rachar a Conta)</h4>
                     <form action='/parcial' method='post' style='display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0;'>
-                        <input type='hidden' name='p' value='{query.numero_comanda}'>
+                        <input type='hidden' name='p' value='{query.numero_pulseira}'>
                         <input type='hidden' name='cpf' value='{query.cpf}'>
                         <input type='number' step='0.01' name='val' max='{tot_final}' class='input-padrao' placeholder='R$ Valor' required style='flex:1; min-width:80px; margin:0;'>
                         <select name='pg' class='input-padrao' style='flex:1; min-width:110px; margin:0;'>
@@ -601,7 +624,7 @@ async def fechar_conta(request: Request, q: str = ""):
                 </div>
                 """
                 res = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; color:#333; margin-top:20px; text-align:left;'>
-                    <h3 style='text-align:center; margin-top:0;'>{query.nome_completo}</h3><p style='text-align:center;'>Comanda/Mesa: <b>{query.numero_comanda}</b></p>
+                    <h3 style='text-align:center; margin-top:0;'>{query.nome_completo}</h3><p style='text-align:center;'>Comanda/Mesa: <b>{query.numero_pulseira}</b></p>
                     <div style='background:white; padding:15px; border-radius:8px; max-height:220px; overflow-y:auto; border:1px solid #ccc;'>{lista}</div>
                     <div style='padding-top:15px; font-size:16px;'>
                         <div class='item-linha'><span>Saldo Devedor S/ Tx:</span><span>R$ {subt:.2f}</span></div>
@@ -614,7 +637,7 @@ async def fechar_conta(request: Request, q: str = ""):
                     </div>
                     {form_parcial}
                     <form action='/confirmar_fechamento' method='post'>
-                        <input type='hidden' name='p' value='{query.numero_comanda}'><input type='hidden' name='divisao' id='input_div' value='1'><input type='hidden' name='desconto' id='input_desc_form' value='0'><input type='hidden' name='pagamento' id='input_pag_form' value='DINHEIRO'>
+                        <input type='hidden' name='p' value='{query.numero_pulseira}'><input type='hidden' name='divisao' id='input_div' value='1'><input type='hidden' name='desconto' id='input_desc_form' value='0'><input type='hidden' name='pagamento' id='input_pag_form' value='DINHEIRO'>
                         <div style='background:#e9ecef; padding:15px; border-radius:8px; margin-top:15px; border:1px solid #ccc;'>
                             <div style='display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;'><span style='font-weight:bold; color:#28a745;'>🧾 Emitir Nota Fiscal (NFC-e)?</span><label class='switch'><input type='checkbox' name='nfe' onchange='document.getElementById("box-cpf").style.display = this.checked ? "block" : "none"'><span class='slider'></span></label></div>
                             <div id='box-cpf' style='display:none;'><span style='font-size:12px; color:#666;'>CPF:</span><input class='input-padrao' name='cpf_nota' value='{query.cpf}'></div>
@@ -623,7 +646,7 @@ async def fechar_conta(request: Request, q: str = ""):
                     </form>
                     <script>function calcDiv() {{ let subt = {subt}; let taxa = {taxa}; let desc = parseFloat(document.getElementById('input_desconto').value.replace(',', '.')) || 0; let div = parseInt(document.getElementById('divisores').value) || 1; let totFinal = Math.max(subt + taxa - desc, 0); document.getElementById('tot_final').innerText = 'R$ ' + totFinal.toFixed(2); document.getElementById('val_pessoa').innerText = 'R$ ' + (totFinal / div).toFixed(2); document.getElementById('input_div').value = div; document.getElementById('input_desc_form').value = desc; }}</script>
                 </div>"""
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Fechar Conta</h2><form method='get'><input class='input-padrao' name='q' placeholder='CPF ou Nº Comanda/Mesa' value='{q}' required><button class='btn-acao'>CONSULTAR CONTA</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Fechar Conta</h2><form method='get'><input type='number' inputmode='numeric' pattern='[0-9]*' class='input-padrao' name='q' placeholder='Nº Comanda/Mesa ou CPF' value='{q}' required><button class='btn-acao'>CONSULTAR CONTA</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
 
 @app.post("/parcial")
 async def registrar_parcial(request: Request):
@@ -635,8 +658,8 @@ async def registrar_parcial(request: Request):
     valor_real_abatido = val / 1.10
     try:
         with engine.begin() as conn:
-            conn.execute(text("UPDATE comandas SET total_conta = total_conta - :v WHERE numero_comanda=:p AND status='ABERTA'"), {"v": valor_real_abatido, "p": p})
-            conn.execute(text("INSERT INTO comandas (numero_comanda, cliente_cpf, total_conta, status, forma_pagamento, data_fechamento) VALUES (:p_dummy, :c, :v, 'FECHADA', :pg, CURRENT_TIMESTAMP)"), {"p_dummy": f"{p}-PARC{tag}", "c": cpf, "v": valor_real_abatido, "pg": pg})
+            conn.execute(text("UPDATE pulseiras SET total_conta = total_conta - :v WHERE numero_pulseira=:p AND status='ABERTA'"), {"v": valor_real_abatido, "p": p})
+            conn.execute(text("INSERT INTO pulseiras (numero_pulseira, cliente_cpf, total_conta, status, forma_pagamento, data_fechamento) VALUES (:p_dummy, :c, :v, 'FECHADA', :pg, CURRENT_TIMESTAMP)"), {"p_dummy": f"{p}-PARC{tag}", "c": cpf, "v": valor_real_abatido, "pg": pg})
             txt = f"--------------------------------\n      SISTEMA JPMS\n  PAGAMENTO PARCIAL\nCOMANDA/MESA: {p}\nVALOR PAGO: R$ {val:.2f}\nPAGTO: {pg}\n--------------------------------\n"
             conn.execute(text("INSERT INTO fila_impressao (conteudo) VALUES (:t)"), {"t": txt})
     except: pass
@@ -648,10 +671,10 @@ async def confirmar_fechamento(request: Request):
     p, pag, nfe, cpf, desc = f.get("p"), f.get("pagamento"), f.get("nfe"), f.get("cpf_nota"), float(f.get("desconto", "0"))
     try:
         with engine.begin() as conn: 
-            c = conn.execute(text("SELECT c.nome_completo, p.total_conta FROM comandas p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE p.numero_comanda = :p AND p.status = 'ABERTA'"), {"p": p}).fetchone()
+            c = conn.execute(text("SELECT c.nome_completo, p.total_conta FROM pulseiras p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE p.numero_pulseira = :p AND p.status = 'ABERTA'"), {"p": p}).fetchone()
             if c:
-                conn.execute(text("UPDATE comandas SET status = 'FECHADA', forma_pagamento = :pag, data_fechamento = CURRENT_TIMESTAMP, nfe_solicitada = :nfe, cpf_nota = :cpf, desconto = :desc WHERE numero_comanda = :p AND status = 'ABERTA'"), {"p": p, "pag": pag, "nfe": bool(nfe), "cpf": cpf, "desc": desc})
-                conn.execute(text("UPDATE vendas_itens SET status = 'FECHADA' WHERE comanda_num = :p AND status = 'ABERTA'"), {"p": p})
+                conn.execute(text("UPDATE pulseiras SET status = 'FECHADA', forma_pagamento = :pag, data_fechamento = CURRENT_TIMESTAMP, nfe_solicitada = :nfe, cpf_nota = :cpf, desconto = :desc WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p, "pag": pag, "nfe": bool(nfe), "cpf": cpf, "desc": desc})
+                conn.execute(text("UPDATE vendas_itens SET status = 'FECHADA' WHERE pulseira_num = :p AND status = 'ABERTA'"), {"p": p})
                 tot = (float(c.total_conta) * 1.1) - desc
                 txt = f"--------------------------------\n      SISTEMA JPMS\nFECHAMENTO DE CONTA\nCOMANDA/MESA: {p}\nTOTAL: R$ {tot:.2f}\nPAGTO: {pag}\n--------------------------------\n"
                 if nfe: txt += f"NFC-e SOLICITADA\nCPF: {cpf}\n--------------------------------\n"
@@ -669,7 +692,7 @@ async def tela_busca(q: str = ""):
     if q:
         with engine.connect() as conn:
             for r in conn.execute(text("SELECT nome_completo, cpf FROM clientes WHERE nome_completo ILIKE :q OR cpf LIKE :q"), {"q": f"%{q}%"}).fetchall():
-                res += f"<tr><td style='color:#333'>{r.nome_completo}</td><td><form action='/abrir' method='post' style='display:flex;gap:5px'><input type='hidden' name='cpf' value='{r.cpf}'><input class='input-padrao' name='p' placeholder='Nº' required style='width:60px;margin:0'><button class='btn-acao' style='background:#d31a21;padding:8px;margin:0'>ABRIR</button></form></td></tr>"
+                res += f"<tr><td style='color:#333'>{r.nome_completo}</td><td><form action='/abrir' method='post' style='display:flex;gap:5px'><input type='hidden' name='cpf' value='{r.cpf}'><input type='number' inputmode='numeric' pattern='[0-9]*' class='input-padrao' name='p' placeholder='Nº Comanda' required style='width:100px;margin:0'><button class='btn-acao' style='background:#d31a21;padding:8px;margin:0'>ABRIR</button></form></td></tr>"
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Buscar Cliente / Comanda</h2><form method='get'><input class='input-padrao' name='q' placeholder='Nome ou CPF' value='{q}'><button class='btn-acao' style='background:#062b5e;'>PESQUISAR</button></form><table>{res}</table><br><a href='/central'>Voltar</a></div></div></body></html>"
 
 @app.post("/abrir")
@@ -678,9 +701,9 @@ async def abrir(request: Request):
     cpf, p = f.get("cpf"), f.get("p")
     try:
         with engine.begin() as conn:
-            if conn.execute(text("SELECT numero_comanda FROM comandas WHERE cliente_cpf = :c AND status = 'ABERTA'"), {"c": cpf}).fetchone(): return HTMLResponse("<script>alert('Cliente já tem comanda aberta!'); window.history.back();</script>")
-            if conn.execute(text("SELECT cliente_cpf FROM comandas WHERE numero_comanda = :p AND status = 'ABERTA'"), {"p": p}).fetchone(): return HTMLResponse("<script>alert('Comanda/Mesa em uso!'); window.history.back();</script>")
-            conn.execute(text("INSERT INTO comandas (numero_comanda, cliente_cpf, total_conta, status) VALUES (:p, :c, 0.00, 'ABERTA')"), {"p": p, "c": cpf})
+            if conn.execute(text("SELECT numero_pulseira FROM pulseiras WHERE cliente_cpf = :c AND status = 'ABERTA'"), {"c": cpf}).fetchone(): return HTMLResponse("<script>alert('Cliente já tem comanda aberta!'); window.history.back();</script>")
+            if conn.execute(text("SELECT cliente_cpf FROM pulseiras WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p}).fetchone(): return HTMLResponse("<script>alert('Comanda/Mesa em uso!'); window.history.back();</script>")
+            conn.execute(text("INSERT INTO pulseiras (numero_pulseira, cliente_cpf, total_conta, status) VALUES (:p, :c, 0.00, 'ABERTA')"), {"p": p, "c": cpf})
     except: pass
     return RedirectResponse(url=f"/vendas?p={p}", status_code=303)
 
@@ -690,7 +713,7 @@ async def tela_cadastro():
         if not conn.execute(text("SELECT id FROM turnos WHERE status = 'ABERTO'")).fetchone():
             return HTMLResponse("<script>alert('O Evento está fechado! Inicie o evento no menu principal primeiro.'); window.location.href='/central';</script>")
             
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Novo Cliente / Mesa</h2><form action='/salvar' method='post'><input class='input-padrao' name='nome' placeholder='Nome Completo' required><input class='input-padrao' name='cpf' placeholder='CPF' required><input class='input-padrao' name='nasc' type='date' required><input class='input-padrao' name='contato' placeholder='WhatsApp' required><input class='input-padrao' name='comanda' placeholder='Nº Comanda/Mesa' required><button class='btn-acao' style='background:#d31a21'>SALVAR E ABRIR</button></form><br><a href='/central'>Voltar</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Novo Cliente / Mesa</h2><form action='/salvar' method='post'><input class='input-padrao' name='nome' placeholder='Nome Completo' required><input class='input-padrao' name='cpf' placeholder='CPF' required><input class='input-padrao' name='nasc' type='date' required><input class='input-padrao' name='contato' placeholder='WhatsApp' required><input type='number' inputmode='numeric' pattern='[0-9]*' class='input-padrao' name='comanda' placeholder='Nº Comanda/Mesa' required><button class='btn-acao' style='background:#d31a21'>SALVAR E ABRIR</button></form><br><a href='/central'>Voltar</a></div></div></body></html>"
 
 @app.post("/salvar")
 async def salvar(request: Request):
@@ -699,9 +722,9 @@ async def salvar(request: Request):
     try:
         with engine.begin() as conn:
             conn.execute(text("INSERT INTO clientes (nome_completo, cpf, data_nascimento, contato) VALUES (:n, :c, :d, :co) ON CONFLICT (cpf) DO NOTHING"), {"n":n, "c":c, "d":d, "co":co})
-            if conn.execute(text("SELECT numero_comanda FROM comandas WHERE cliente_cpf = :c AND status = 'ABERTA'"), {"c": c}).fetchone(): return HTMLResponse("<script>alert('Cliente já possui comanda aberta!'); window.history.back();</script>")
-            if conn.execute(text("SELECT cliente_cpf FROM comandas WHERE numero_comanda = :p AND status = 'ABERTA'"), {"p": p}).fetchone(): return HTMLResponse("<script>alert('Comanda/Mesa em uso por outra pessoa!'); window.history.back();</script>")
-            conn.execute(text("INSERT INTO comandas (numero_comanda, cliente_cpf, total_conta, status) VALUES (:p, :c, 0.00, 'ABERTA')"), {"p":p, "c":c})
+            if conn.execute(text("SELECT numero_pulseira FROM pulseiras WHERE cliente_cpf = :c AND status = 'ABERTA'"), {"c": c}).fetchone(): return HTMLResponse("<script>alert('Cliente já possui comanda aberta!'); window.history.back();</script>")
+            if conn.execute(text("SELECT cliente_cpf FROM pulseiras WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p}).fetchone(): return HTMLResponse("<script>alert('Comanda/Mesa em uso por outra pessoa!'); window.history.back();</script>")
+            conn.execute(text("INSERT INTO pulseiras (numero_pulseira, cliente_cpf, total_conta, status) VALUES (:p, :c, 0.00, 'ABERTA')"), {"p":p, "c":c})
     except: pass
     return RedirectResponse(url=f"/vendas?p={p}", status_code=303)
 

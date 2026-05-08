@@ -162,16 +162,30 @@ async def login(request: Request):
 async def central(request: Request):
     user, role = request.session.get("user"), request.session.get("role")
     if not user: return RedirectResponse(url="/")
+    
+    with engine.connect() as conn:
+        turno_aberto = conn.execute(text("SELECT id FROM turnos WHERE status = 'ABERTO' LIMIT 1")).fetchone()
+        
     b = ""
-    if role in ["admin", "gerente", "garcom", "caixa", "portaria"]:
-        b += f"<a href='/cadastro' class='btn-acao' style='background:#0d9488'>➕ NOVO CLIENTE / COMANDA</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a>"
-    if role in ["admin", "gerente", "garcom", "caixa"]:
-        b += f"<a href='/vendas' class='btn-acao' style='background:#10b981'>🛒 CAIXA / LANÇAR ITENS</a><a href='/fechar_conta' class='btn-acao' style='background:#334155'>🔒 FECHAR CONTA</a><a href='/caixa' class='btn-acao' style='background:#f59e0b; color:#0f172a;'>💰 GESTÃO DE CAIXA (TURNO)</a>"
-    if role in ["admin", "gerente"]:
-        b += "<a href='/comissoes' class='btn-acao' style='background:#8b5cf6'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#0ea5e9'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#1e293b'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a>"
-        b += "<a href='/baixar_conector' class='btn-acao' style='background:#ef4444;'>📥 BAIXAR CONECTOR DE IMPRESSORA PC</a>"
-    if role == "admin":
-        b += "<a href='/usuarios' class='btn-acao' style='background:#475569'>👥 GERENCIAR USUÁRIOS</a>"
+    if not turno_aberto:
+        b += f"<div style='background:#fef3c7; border:2px dashed #f59e0b; padding:15px; border-radius:8px; margin-bottom:15px; color:#d97706; font-weight:bold;'>⚠️ O CAIXA/EVENTO ESTÁ FECHADO!</div>"
+        if role in ["admin", "gerente", "caixa"]:
+            b += f"<a href='/caixa' class='btn-acao' style='background:#10b981; padding:20px; font-size:18px;'>🟢 INICIAR EVENTO (ABRIR CAIXA)</a>"
+        if role in ["admin", "gerente"]:
+            b += "<a href='/dashboard' class='btn-acao' style='background:#0ea5e9'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#1e293b'>📦 GESTÃO DE ESTOQUE</a>"
+        if role == "admin":
+            b += "<a href='/usuarios' class='btn-acao' style='background:#475569'>👥 GERENCIAR USUÁRIOS</a>"
+    else:
+        if role in ["admin", "gerente", "garcom", "caixa", "portaria"]:
+            b += f"<a href='/cadastro' class='btn-acao' style='background:#0d9488'>➕ NOVO CLIENTE / COMANDA</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a>"
+        if role in ["admin", "gerente", "garcom", "caixa"]:
+            b += f"<a href='/vendas' class='btn-acao' style='background:#10b981'>🛒 LANÇAR ITENS NA MESA</a><a href='/fechar_conta' class='btn-acao' style='background:#334155'>🔒 FECHAR CONTA</a><a href='/caixa' class='btn-acao' style='background:#f59e0b; color:#0f172a;'>💰 GESTÃO DO EVENTO (CAIXA)</a>"
+        if role in ["admin", "gerente"]:
+            b += "<a href='/comissoes' class='btn-acao' style='background:#8b5cf6'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#0ea5e9'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#1e293b'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a>"
+            b += "<a href='/baixar_conector' class='btn-acao' style='background:#ef4444;'>📥 BAIXAR CONECTOR DE IMPRESSORA PC</a>"
+        if role == "admin":
+            b += "<a href='/usuarios' class='btn-acao' style='background:#475569'>👥 GERENCIAR USUÁRIOS</a>"
+            
     return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<p>Logado como: <b>{user.upper()}</b></p>{b}<br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"""
 
 @app.get("/baixar_conector")
@@ -227,7 +241,7 @@ async def tela_caixa(request: Request):
         turno = conn.execute(text("SELECT id, data_abertura, fundo_inicial FROM turnos WHERE status = 'ABERTO' ORDER BY id DESC LIMIT 1")).fetchone()
         
         if not turno:
-            return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<div style='background:#f1f5f9; padding:20px; border-radius:10px; border:1px solid #cbd5e1;'><h3 style='color:#0ea5e9; margin-top:0;'>Abrir Caixa (Novo Turno)</h3><form action='/abrir_turno' method='post'><label style='color:#334155; font-weight:bold; display:block; text-align:left; margin-bottom:5px;'>Fundo de Caixa Inicial (Dinheiro na Gaveta):</label><input type='number' step='0.01' name='fundo_inicial' class='input-padrao' required placeholder='R$ 0.00' style='font-size:20px; font-weight:bold;'><button class='btn-acao' style='background:#10b981; margin-top:15px; font-size:18px;'>✔️ ABRIR TURNO</button></form></div><br><a href='/central' style='color:gray'>Voltar ao Menu</a></div></div></body></html>"
+            return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<div style='background:#f1f5f9; padding:20px; border-radius:10px; border:1px solid #cbd5e1;'><h3 style='color:#0ea5e9; margin-top:0;'>Iniciar Evento (Abrir Caixa)</h3><form action='/abrir_turno' method='post'><label style='color:#334155; font-weight:bold; display:block; text-align:left; margin-bottom:5px;'>Fundo de Caixa Inicial (Dinheiro na Gaveta):</label><input type='number' step='0.01' name='fundo_inicial' class='input-padrao' required placeholder='R$ 0.00' style='font-size:20px; font-weight:bold;'><button class='btn-acao' style='background:#10b981; margin-top:15px; font-size:18px;'>🟢 INICIAR EVENTO</button></form></div><br><a href='/central' style='color:gray'>Voltar ao Menu</a></div></div></body></html>"
 
         pag_q = conn.execute(text(f"SELECT forma_pagamento, SUM(total_conta) as total FROM comandas WHERE data_fechamento >= :inicio AND status = 'FECHADA' GROUP BY forma_pagamento"), {"inicio": turno.data_abertura}).fetchall()
         totais = {"DINHEIRO": 0.0, "PIX": 0.0, "C. CREDITO": 0.0, "C. DEBITO": 0.0}
@@ -237,7 +251,7 @@ async def tela_caixa(request: Request):
         tot_sangria = sum([float(m.valor) for m in mov_q if m.tipo == 'SANGRIA'])
         linhas_mov = "".join([f"<tr><td style='color:black;'>{m.hora}</td><td style='color:black;'>{m.tipo} - {m.descricao}</td><td style='color:#ef4444; font-weight:bold;'>- R$ {float(m.valor):.2f}</td></tr>" for m in mov_q if m.tipo == 'SANGRIA'])
         
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center' style='max-width:700px;'>{IMG_LOGO_PEQ}<h2>💰 Gestão de Caixa (Turno Atual)</h2><p style='color:#64748b; font-size:14px; margin-top:-15px;'>Aberto em: {turno.data_abertura.strftime('%d/%m/%Y %H:%M')}</p><div style='display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:20px;'><div style='background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #10b981; flex:1; min-width:140px;'><b>💵 Dinheiro Vendas:</b><br><span style='font-size:20px; color:#10b981;'>R$ {totais['DINHEIRO']:.2f}</span></div><div style='background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #0ea5e9; flex:1; min-width:140px;'><b>💠 PIX:</b><br><span style='font-size:20px; color:#0ea5e9;'>R$ {totais['PIX']:.2f}</span></div><div style='background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #f59e0b; flex:1; min-width:140px;'><b>💳 Cartões:</b><br><span style='font-size:20px; color:#f59e0b;'>R$ {(totais['C. CREDITO'] + totais['C. DEBITO']):.2f}</span></div></div><div style='background:#f1f5f9; padding:20px; border-radius:10px; text-align:left; border:1px solid #cbd5e1; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;'><span style='color:#334155; font-size:16px; font-weight:bold;'>📥 Fundo de Caixa Inicial:</span><span style='color:#10b981; font-size:20px; font-weight:bold;'>R$ {float(turno.fundo_inicial):.2f}</span></div><div style='background:#f1f5f9; padding:20px; border-radius:10px; text-align:left; border:1px solid #cbd5e1; margin-bottom:20px;'><h3 style='margin-top:0; color:#ef4444;'>🔻 Fazer Sangria (Retirada da Gaveta)</h3><form action='/sangria' method='post' style='display:flex; flex-wrap:wrap; gap:10px;'><input name='valor' type='number' step='0.01' placeholder='Valor R$' class='input-padrao' style='flex:1; min-width:100px;' required><input name='desc' type='text' placeholder='Motivo (Ex: Gelo, Vale)' class='input-padrao' style='flex:2; min-width:180px;' required><button class='btn-acao' style='background:#ef4444; margin:0; width:100px;'>TIRAR</button></form></div><h3 style='text-align:left; margin-bottom:5px;'>Histórico de Retiradas</h3><div style='max-height:150px; overflow-y:auto; border:1px solid #cbd5e1; margin-bottom:20px;'><table><tr><th style='color:#0f172a'>Hora</th><th style='color:#0f172a'>Motivo</th><th style='color:#0f172a'>Valor</th></tr>{linhas_mov if linhas_mov else '<tr><td colspan=3 style=color:black;text-align:center;>Nenhuma retirada.</td></tr>'}</table></div><a href='/caixa_cego' class='btn-acao' style='background:#0ea5e9; font-size:18px; padding:20px;'>🔒 FECHAR TURNO / BATER CAIXA</a><br><a href='/central' style='color:gray'>Voltar ao Menu</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center' style='max-width:700px;'>{IMG_LOGO_PEQ}<h2>💰 Gestão de Caixa (Evento Atual)</h2><p style='color:#64748b; font-size:14px; margin-top:-15px;'>Aberto em: {turno.data_abertura.strftime('%d/%m/%Y %H:%M')}</p><div style='display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:20px;'><div style='background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #10b981; flex:1; min-width:140px;'><b>💵 Dinheiro Vendas:</b><br><span style='font-size:20px; color:#10b981;'>R$ {totais['DINHEIRO']:.2f}</span></div><div style='background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #0ea5e9; flex:1; min-width:140px;'><b>💠 PIX:</b><br><span style='font-size:20px; color:#0ea5e9;'>R$ {totais['PIX']:.2f}</span></div><div style='background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #f59e0b; flex:1; min-width:140px;'><b>💳 Cartões:</b><br><span style='font-size:20px; color:#f59e0b;'>R$ {(totais['C. CREDITO'] + totais['C. DEBITO']):.2f}</span></div></div><div style='background:#f1f5f9; padding:20px; border-radius:10px; text-align:left; border:1px solid #cbd5e1; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;'><span style='color:#334155; font-size:16px; font-weight:bold;'>📥 Fundo de Caixa Inicial:</span><span style='color:#10b981; font-size:20px; font-weight:bold;'>R$ {float(turno.fundo_inicial):.2f}</span></div><div style='background:#f1f5f9; padding:20px; border-radius:10px; text-align:left; border:1px solid #cbd5e1; margin-bottom:20px;'><h3 style='margin-top:0; color:#ef4444;'>🔻 Fazer Sangria (Retirada da Gaveta)</h3><form action='/sangria' method='post' style='display:flex; flex-wrap:wrap; gap:10px;'><input name='valor' type='number' step='0.01' placeholder='Valor R$' class='input-padrao' style='flex:1; min-width:100px;' required><input name='desc' type='text' placeholder='Motivo (Ex: Gelo, Vale)' class='input-padrao' style='flex:2; min-width:180px;' required><button class='btn-acao' style='background:#ef4444; margin:0; width:100px;'>TIRAR</button></form></div><h3 style='text-align:left; margin-bottom:5px;'>Histórico de Retiradas</h3><div style='max-height:150px; overflow-y:auto; border:1px solid #cbd5e1; margin-bottom:20px;'><table><tr><th style='color:#0f172a'>Hora</th><th style='color:#0f172a'>Motivo</th><th style='color:#0f172a'>Valor</th></tr>{linhas_mov if linhas_mov else '<tr><td colspan=3 style=color:black;text-align:center;>Nenhuma retirada.</td></tr>'}</table></div><a href='/caixa_cego' class='btn-acao' style='background:#0ea5e9; font-size:18px; padding:20px;'>🔒 ENCERRAR EVENTO (BATER CAIXA)</a><br><a href='/central' style='color:gray'>Voltar ao Menu</a></div></div></body></html>"
 
 @app.post("/abrir_turno")
 async def abrir_turno(request: Request):
@@ -297,10 +311,10 @@ async def resumo_whatsapp(request: Request):
     faturamento_liq = faturamento_bruto - tot_comissao
     status_caixa = "✅ Bateu certinho! R$ 0.00" if dif == 0 else f"⚠️ Sobrou na gaveta: R$ {dif:.2f}" if dif > 0 else f"❌ FURO DE CAIXA: R$ {dif:.2f}"
     
-    mensagem = f"📊 *FECHAMENTO DE CAIXA*\n*Descontos Totais Concedidos:* R$ {tot_desconto:.2f}\n*Abertura:* {turno.data_abertura.strftime('%d/%m/%Y %H:%M')}\n*Fechamento:* {datetime.now().strftime('%d/%m/%Y %H:%M')}\n*Operador:* {usuario}\n\n*Vendas por Pagamento:*\n💵 Dinheiro: R$ {totais['DINHEIRO']:.2f}\n💳 Cartão: R$ {(totais['C. CREDITO'] + totais['C. DEBITO']):.2f}\n💠 PIX: R$ {totais['PIX']:.2f}\n\n*Movimentações (Gaveta):*\n💵 Fundo Inicial: R$ {fundo_inicial:.2f}\n🔻 Sangrias: R$ {tot_sangria:.2f}\n\n*Auditoria da Gaveta:*\nInformado: R$ {gaveta:.2f}\nDeveria ter: R$ {esperado:.2f}\n*Status:* {status_caixa}\n\n*Resumo Geral:*\n💰 Bruto Vendido: R$ {faturamento_bruto:.2f}\n💸 Comissões: R$ {tot_comissao:.2f}\n✅ *Líquido: R$ {faturamento_liq:.2f}*"
+    mensagem = f"📊 *FECHAMENTO DE EVENTO/CAIXA*\n*Descontos Totais Concedidos:* R$ {tot_desconto:.2f}\n*Abertura:* {turno.data_abertura.strftime('%d/%m/%Y %H:%M')}\n*Fechamento:* {datetime.now().strftime('%d/%m/%Y %H:%M')}\n*Operador:* {usuario}\n\n*Vendas por Pagamento:*\n💵 Dinheiro: R$ {totais['DINHEIRO']:.2f}\n💳 Cartão: R$ {(totais['C. CREDITO'] + totais['C. DEBITO']):.2f}\n💠 PIX: R$ {totais['PIX']:.2f}\n\n*Movimentações (Gaveta):*\n💵 Fundo Inicial: R$ {fundo_inicial:.2f}\n🔻 Sangrias: R$ {tot_sangria:.2f}\n\n*Auditoria da Gaveta:*\nInformado: R$ {gaveta:.2f}\nDeveria ter: R$ {esperado:.2f}\n*Status:* {status_caixa}\n\n*Resumo Geral:*\n💰 Bruto Vendido: R$ {faturamento_bruto:.2f}\n💸 Comissões: R$ {tot_comissao:.2f}\n✅ *Líquido: R$ {faturamento_liq:.2f}*"
     zap_url = f"https://wa.me/?text={urllib.parse.quote(mensagem)}"
     
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center' style='max-width:600px;'><h2>Auditoria Concluída & Turno Fechado</h2><div style='background:#f1f5f9; padding:20px; border-radius:8px; text-align:left; color:#0f172a; font-family:monospace; font-size:14px; margin-bottom:20px; white-space:pre-wrap;'>{mensagem.replace('*', '<b>').replace('<b>', '</b>', 1)}</div><a href='{zap_url}' target='_blank' class='btn-acao' style='background:#25D366; font-size:18px; padding:20px;'>📱 ENVIAR RESUMO WHATSAPP</a><br><a href='/central' style='color:gray'>Voltar ao Menu Inicial</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center' style='max-width:600px;'><h2>Auditoria Concluída & Evento Fechado</h2><div style='background:#f1f5f9; padding:20px; border-radius:8px; text-align:left; color:#0f172a; font-family:monospace; font-size:14px; margin-bottom:20px; white-space:pre-wrap;'>{mensagem.replace('*', '<b>').replace('<b>', '</b>', 1)}</div><a href='{zap_url}' target='_blank' class='btn-acao' style='background:#25D366; font-size:18px; padding:20px;'>📱 ENVIAR RESUMO WHATSAPP</a><br><a href='/central' style='color:gray'>Voltar ao Menu Inicial</a></div></div></body></html>"
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str = "", prod: str = "", garcom_filtro: str = ""):
@@ -487,8 +501,11 @@ async def excluir_usuario(request: Request):
 @app.get("/vendas", response_class=HTMLResponse)
 async def vendas(request: Request, cat: str = "CHOPP", p: str = ""):
     if request.session.get("role") not in ["admin", "gerente", "garcom", "caixa"]: return RedirectResponse(url="/central")
-    prods, itens_html = "", ""
     with engine.connect() as conn:
+        if not conn.execute(text("SELECT id FROM turnos WHERE status = 'ABERTO'")).fetchone():
+            return HTMLResponse("<script>alert('O Evento está fechado! Inicie o evento no menu principal primeiro.'); window.location.href='/central';</script>")
+            
+        prods, itens_html = "", ""
         for n, v, e in conn.execute(text("SELECT nome, preco, estoque FROM produtos WHERE categoria = :c ORDER BY nome"), {"c": cat}).fetchall():
             estoque_atual = int(e or 0)
             if estoque_atual > 0:
@@ -544,8 +561,11 @@ async def lancar_pedido(request: Request):
 async def fechar_conta(request: Request, q: str = ""):
     if request.session.get("role") not in ["admin", "gerente", "garcom", "caixa"]: return RedirectResponse(url="/central")
     res = ""
-    if q:
-        with engine.connect() as conn:
+    with engine.connect() as conn:
+        if not conn.execute(text("SELECT id FROM turnos WHERE status = 'ABERTO'")).fetchone():
+            return HTMLResponse("<script>alert('O Evento está fechado! Inicie o evento no menu principal primeiro.'); window.location.href='/central';</script>")
+            
+        if q:
             query = conn.execute(text("SELECT p.numero_comanda, p.total_conta, c.nome_completo, c.cpf FROM comandas p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE (p.numero_comanda = :q OR c.cpf = :q) AND p.status = 'ABERTA'"), {"q": q.strip()}).fetchone()
             if query:
                 itens_q = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE comanda_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": query.numero_comanda}).fetchall()
@@ -628,6 +648,10 @@ async def confirmar_fechamento(request: Request):
 
 @app.get("/buscar", response_class=HTMLResponse)
 async def tela_busca(q: str = ""):
+    with engine.connect() as conn:
+        if not conn.execute(text("SELECT id FROM turnos WHERE status = 'ABERTO'")).fetchone():
+            return HTMLResponse("<script>alert('O Evento está fechado! Inicie o evento no menu principal primeiro.'); window.location.href='/central';</script>")
+            
     res = ""
     if q:
         with engine.connect() as conn:
@@ -649,6 +673,10 @@ async def abrir(request: Request):
 
 @app.get("/cadastro", response_class=HTMLResponse)
 async def tela_cadastro(): 
+    with engine.connect() as conn:
+        if not conn.execute(text("SELECT id FROM turnos WHERE status = 'ABERTO'")).fetchone():
+            return HTMLResponse("<script>alert('O Evento está fechado! Inicie o evento no menu principal primeiro.'); window.location.href='/central';</script>")
+            
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Novo Cliente / Mesa</h2><form action='/salvar' method='post'><input class='input-padrao' name='nome' placeholder='Nome Completo' required><input class='input-padrao' name='cpf' placeholder='CPF' required><input class='input-padrao' name='nasc' type='date' required><input class='input-padrao' name='contato' placeholder='WhatsApp' required><input class='input-padrao' name='comanda' placeholder='Nº Comanda/Mesa' required><button class='btn-acao' style='background:#0d9488'>SALVAR E ABRIR</button></form><br><a href='/central'>Voltar</a></div></div></body></html>"
 
 @app.post("/salvar")

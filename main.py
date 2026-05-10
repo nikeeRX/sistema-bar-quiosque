@@ -31,13 +31,14 @@ IMAGENS_CAT = {
 with engine.begin() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS clientes (id SERIAL PRIMARY KEY, nome_completo TEXT NOT NULL, cpf TEXT UNIQUE NOT NULL, data_nascimento DATE, contato TEXT, email TEXT);
-        CREATE TABLE IF NOT EXISTS comandas (id SERIAL PRIMARY KEY, numero_comanda TEXT NOT NULL, cliente_cpf TEXT REFERENCES clientes(cpf), total_conta DECIMAL(10,2) DEFAULT 0.00, status TEXT DEFAULT 'ABERTA', forma_pagamento TEXT, data_fechamento TIMESTAMP, nfe_solicitada BOOLEAN DEFAULT FALSE, cpf_nota TEXT);
+        CREATE TABLE IF NOT EXISTS comandas (id SERIAL PRIMARY KEY, numero_comanda TEXT NOT NULL, cliente_cpf TEXT REFERENCES clientes(cpf), total_conta DECIMAL(10,2) DEFAULT 0.00, status TEXT DEFAULT 'ABERTA', forma_pagamento TEXT, data_fechamento TIMESTAMP, nfe_solicitada BOOLEAN DEFAULT FALSE, cpf_nota TEXT, desconto DECIMAL(10,2) DEFAULT 0.00);
         CREATE TABLE IF NOT EXISTS vendas_itens (id SERIAL PRIMARY KEY, comanda_num TEXT, item_nome TEXT, valor DECIMAL(10,2), data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME, status TEXT DEFAULT 'ABERTA', garcom TEXT, comissao_status TEXT DEFAULT 'PENDENTE');
         CREATE TABLE IF NOT EXISTS produtos (id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL, categoria TEXT DEFAULT 'OUTROS', preco DECIMAL(10,2) DEFAULT 0.00, estoque INT DEFAULT 0);
         CREATE TABLE IF NOT EXISTS fila_impressao (id SERIAL PRIMARY KEY, conteudo TEXT, status TEXT DEFAULT 'PENDENTE', data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
         CREATE TABLE IF NOT EXISTS historico_estoque (id SERIAL PRIMARY KEY, produto_nome TEXT, qtd_adicionada INT, data_entrada DATE DEFAULT CURRENT_DATE);
         CREATE TABLE IF NOT EXISTS usuarios (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS caixa_movimentos (id SERIAL PRIMARY KEY, tipo TEXT, valor DECIMAL(10,2), descricao TEXT, data_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP, usuario TEXT);
+        CREATE TABLE IF NOT EXISTS turnos (id SERIAL PRIMARY KEY, data_abertura TIMESTAMP DEFAULT CURRENT_TIMESTAMP, data_fechamento TIMESTAMP, fundo_inicial DECIMAL(10,2) DEFAULT 0.00, status TEXT DEFAULT 'ABERTO', usuario_abertura TEXT, usuario_fechamento TEXT);
     """))
 
 MIGRACOES = [
@@ -46,6 +47,7 @@ MIGRACOES = [
     "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
     "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS forma_pagamento TEXT;",
     "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS data_fechamento TIMESTAMP;",
+    "ALTER TABLE comandas ADD COLUMN IF NOT EXISTS desconto DECIMAL(10,2) DEFAULT 0.00;",
     "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS comissao_status TEXT DEFAULT 'PENDENTE';",
     "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'OUTROS';",
     "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco DECIMAL(10,2) DEFAULT 0.00;",
@@ -164,7 +166,7 @@ async def central(request: Request):
     if role in ["admin", "gerente", "garcom", "caixa", "portaria"]:
         b += f"<a href='/cadastro' class='btn-acao' style='background:#0d9488'>➕ NOVO CLIENTE / COMANDA</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a>"
     if role in ["admin", "gerente", "garcom", "caixa"]:
-        b += f"<a href='/vendas' class='btn-acao' style='background:#10b981'>🛒 CAIXA / LANÇAR ITENS</a><a href='/fechar_conta' class='btn-acao' style='background:#334155'>🔒 FECHAR CONTA</a><a href='/caixa' class='btn-acao' style='background:#f59e0b; color:#0f172a;'>💰 GESTÃO DE CAIXA</a>"
+        b += f"<a href='/vendas' class='btn-acao' style='background:#10b981'>🛒 CAIXA / LANÇAR ITENS</a><a href='/fechar_conta' class='btn-acao' style='background:#334155'>🔒 FECHAR CONTA</a><a href='/caixa' class='btn-acao' style='background:#f59e0b; color:#0f172a;'>💰 GESTÃO DE CAIXA (TURNO)</a>"
     if role in ["admin", "gerente"]:
         b += "<a href='/comissoes' class='btn-acao' style='background:#8b5cf6'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#0ea5e9'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#1e293b'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a>"
         b += "<a href='/baixar_conector' class='btn-acao' style='background:#ef4444;'>📥 BAIXAR CONECTOR DE IMPRESSORA PC</a>"
@@ -177,51 +179,7 @@ async def baixar_conector(request: Request):
     if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
     
     base_url = str(request.base_url).rstrip('/')
-    
-    script_content = f"""import time
-import requests
-import win32print
-
-# Conector de Impressao - JPMS Gestao
-API_URL = "{base_url}"
-
-def imprimir_ticket(texto):
-    impressora_padrao = win32print.GetDefaultPrinter()
-    try:
-        hPrinter = win32print.OpenPrinter(impressora_padrao)
-        hJob = win32print.StartDocPrinter(hPrinter, 1, ("Ticket JPMS", None, "RAW"))
-        win32print.StartPagePrinter(hPrinter)
-        
-        win32print.WritePrinter(hPrinter, texto.encode("utf-8"))
-        win32print.WritePrinter(hPrinter, b"\\n\\n\\n\\n\\x1B\\x6D") # Corte de papel
-        
-        win32print.EndPagePrinter(hPrinter)
-        win32print.EndDocPrinter(hPrinter)
-        win32print.ClosePrinter(hPrinter)
-        print("✔️ Ticket Impresso com Sucesso!")
-    except Exception as e:
-        print(f"❌ Erro na impressora: {{e}}")
-
-print("=========================================")
-print("🚀 CONECTOR DE IMPRESSORA JPMS INICIADO")
-print(f"Conectado em: {{API_URL}}")
-print("Deixe essa janela aberta para receber tickets...")
-print("=========================================\\n")
-
-while True:
-    try:
-        resposta = requests.get(f"{{API_URL}}/api/pendentes", timeout=5)
-        if resposta.status_code == 200:
-            dados = resposta.json()
-            for job in dados.get("jobs", []):
-                print(f"🖨️ Imprimindo pedido ID {{job['id']}}...")
-                imprimir_ticket(job['conteudo'])
-                requests.post(f"{{API_URL}}/api/impresso/{{job['id']}}", timeout=5)
-    except Exception as e:
-        pass # Ignora erros de conexao temporarios
-        
-    time.sleep(3)
-"""
+    script_content = f"""import time\nimport requests\nimport win32print\n\n# Conector de Impressao - JPMS Gestao\nAPI_URL = "{base_url}"\n\ndef imprimir_ticket(texto):\n    impressora_padrao = win32print.GetDefaultPrinter()\n    try:\n        hPrinter = win32print.OpenPrinter(impressora_padrao)\n        hJob = win32print.StartDocPrinter(hPrinter, 1, ("Ticket JPMS", None, "RAW"))\n        win32print.StartPagePrinter(hPrinter)\n        \n        win32print.WritePrinter(hPrinter, texto.encode("utf-8"))\n        win32print.WritePrinter(hPrinter, b"\\n\\n\\n\\n\\x1B\\x6D")\n        \n        win32print.EndPagePrinter(hPrinter)\n        win32print.EndDocPrinter(hPrinter)\n        win32print.ClosePrinter(hPrinter)\n        print("✔️ Ticket Impresso com Sucesso!")\n    except Exception as e:\n        print(f"❌ Erro na impressora: {{e}}")\n\nprint("=========================================")\nprint("🚀 CONECTOR DE IMPRESSORA JPMS INICIADO")\nprint(f"Conectado em: {{API_URL}}")\nprint("Deixe essa janela aberta para receber tickets...")\nprint("=========================================\\n")\n\nwhile True:\n    try:\n        resposta = requests.get(f"{{API_URL}}/api/pendentes", timeout=5)\n        if resposta.status_code == 200:\n            dados = resposta.json()\n            for job in dados.get("jobs", []):\n                print(f"🖨️ Imprimindo pedido ID {{job['id']}}...")\n                imprimir_ticket(job['conteudo'])\n                requests.post(f"{{API_URL}}/api/impresso/{{job['id']}}", timeout=5)\n    except Exception as e:\n        pass\n    time.sleep(3)\n"""
     return Response(content=script_content, media_type="text/x-python", headers={"Content-Disposition": "attachment; filename=conector_impressao_jpms.py"})
 
 @app.get("/cardapio", response_class=HTMLResponse)
@@ -264,15 +222,32 @@ async def gerar_qr(request: Request):
 @app.get("/caixa", response_class=HTMLResponse)
 async def tela_caixa(request: Request):
     if request.session.get("role") not in ["admin", "gerente", "caixa"]: return RedirectResponse(url="/central")
-    hoje = date.today().strftime("%Y-%m-%d")
+    
     with engine.connect() as conn:
-        pag_q = conn.execute(text(f"SELECT forma_pagamento, SUM(total_conta) as total FROM comandas WHERE CAST(data_fechamento AS DATE) = CAST('{hoje}' AS DATE) AND status = 'FECHADA' GROUP BY forma_pagamento")).fetchall()
+        turno = conn.execute(text("SELECT id, data_abertura, fundo_inicial FROM turnos WHERE status = 'ABERTO' ORDER BY id DESC LIMIT 1")).fetchone()
+        
+        if not turno:
+            return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<div style='background:#f1f5f9; padding:20px; border-radius:10px; border:1px solid #cbd5e1;'><h3 style='color:#0ea5e9; margin-top:0;'>Abrir Caixa (Novo Turno)</h3><form action='/abrir_turno' method='post'><label style='color:#334155; font-weight:bold; display:block; text-align:left; margin-bottom:5px;'>Fundo de Caixa Inicial (Dinheiro na Gaveta):</label><input type='number' step='0.01' name='fundo_inicial' class='input-padrao' required placeholder='R$ 0.00' style='font-size:20px; font-weight:bold;'><button class='btn-acao' style='background:#10b981; margin-top:15px; font-size:18px;'>✔️ ABRIR TURNO</button></form></div><br><a href='/central' style='color:gray'>Voltar ao Menu</a></div></div></body></html>"
+
+        pag_q = conn.execute(text(f"SELECT forma_pagamento, SUM(total_conta) as total FROM comandas WHERE data_fechamento >= :inicio AND status = 'FECHADA' GROUP BY forma_pagamento"), {"inicio": turno.data_abertura}).fetchall()
         totais = {"DINHEIRO": 0.0, "PIX": 0.0, "C. CREDITO": 0.0, "C. DEBITO": 0.0}
         for p in pag_q: totais[p.forma_pagamento] = float(p.total or 0)
-        mov_q = conn.execute(text(f"SELECT tipo, descricao, valor, TO_CHAR(data_registro, 'HH24:MI') as hora FROM caixa_movimentos WHERE CAST(data_registro AS DATE) = CAST('{hoje}' AS DATE) ORDER BY data_registro DESC")).fetchall()
+        
+        mov_q = conn.execute(text(f"SELECT tipo, descricao, valor, TO_CHAR(data_registro, 'HH24:MI') as hora FROM caixa_movimentos WHERE data_registro >= :inicio ORDER BY data_registro DESC"), {"inicio": turno.data_abertura}).fetchall()
         tot_sangria = sum([float(m.valor) for m in mov_q if m.tipo == 'SANGRIA'])
         linhas_mov = "".join([f"<tr><td style='color:black;'>{m.hora}</td><td style='color:black;'>{m.tipo} - {m.descricao}</td><td style='color:#ef4444; font-weight:bold;'>- R$ {float(m.valor):.2f}</td></tr>" for m in mov_q if m.tipo == 'SANGRIA'])
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center' style='max-width:700px;'>{IMG_LOGO_PEQ}<h2>💰 Gestão de Caixa (Hoje)</h2><div style='display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:20px;'><div style='background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #10b981; flex:1; min-width:140px;'><b>💵 Dinheiro:</b><br><span style='font-size:20px; color:#10b981;'>R$ {totais['DINHEIRO']:.2f}</span></div><div style='background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #0ea5e9; flex:1; min-width:140px;'><b>💠 PIX:</b><br><span style='font-size:20px; color:#0ea5e9;'>R$ {totais['PIX']:.2f}</span></div><div style='background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #f59e0b; flex:1; min-width:140px;'><b>💳 Cartões:</b><br><span style='font-size:20px; color:#f59e0b;'>R$ {(totais['C. CREDITO'] + totais['C. DEBITO']):.2f}</span></div></div><div style='background:#f1f5f9; padding:20px; border-radius:10px; text-align:left; border:1px solid #cbd5e1; margin-bottom:20px;'><h3 style='margin-top:0; color:#ef4444;'>🔻 Fazer Sangria (Retirada)</h3><form action='/sangria' method='post' style='display:flex; flex-wrap:wrap; gap:10px;'><input name='valor' type='number' step='0.01' placeholder='Valor R$' class='input-padrao' style='flex:1; min-width:100px;' required><input name='desc' type='text' placeholder='Motivo (Ex: Gelo, Vale)' class='input-padrao' style='flex:2; min-width:180px;' required><button class='btn-acao' style='background:#ef4444; margin:0; width:100px;'>TIRAR</button></form></div><h3 style='text-align:left; margin-bottom:5px;'>Histórico de Retiradas</h3><div style='max-height:150px; overflow-y:auto; border:1px solid #cbd5e1; margin-bottom:20px;'><table><tr><th style='color:#0f172a'>Hora</th><th style='color:#0f172a'>Motivo</th><th style='color:#0f172a'>Valor</th></tr>{linhas_mov if linhas_mov else '<tr><td colspan=3 style=color:black;text-align:center;>Nenhuma retirada.</td></tr>'}</table></div><a href='/caixa_cego' class='btn-acao' style='background:#0ea5e9; font-size:18px; padding:20px;'>🔒 ENCERRAR TURNO (BATER CAIXA)</a><br><a href='/central' style='color:gray'>Voltar ao Menu</a></div></div></body></html>"
+        
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center' style='max-width:700px;'>{IMG_LOGO_PEQ}<h2>💰 Gestão de Caixa (Turno Atual)</h2><p style='color:#64748b; font-size:14px; margin-top:-15px;'>Aberto em: {turno.data_abertura.strftime('%d/%m/%Y %H:%M')}</p><div style='display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:20px;'><div style='background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #10b981; flex:1; min-width:140px;'><b>💵 Dinheiro Vendas:</b><br><span style='font-size:20px; color:#10b981;'>R$ {totais['DINHEIRO']:.2f}</span></div><div style='background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #0ea5e9; flex:1; min-width:140px;'><b>💠 PIX:</b><br><span style='font-size:20px; color:#0ea5e9;'>R$ {totais['PIX']:.2f}</span></div><div style='background:#f8fafc; padding:15px; border-radius:8px; border-left:4px solid #f59e0b; flex:1; min-width:140px;'><b>💳 Cartões:</b><br><span style='font-size:20px; color:#f59e0b;'>R$ {(totais['C. CREDITO'] + totais['C. DEBITO']):.2f}</span></div></div><div style='background:#f1f5f9; padding:20px; border-radius:10px; text-align:left; border:1px solid #cbd5e1; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;'><span style='color:#334155; font-size:16px; font-weight:bold;'>📥 Fundo de Caixa Inicial:</span><span style='color:#10b981; font-size:20px; font-weight:bold;'>R$ {float(turno.fundo_inicial):.2f}</span></div><div style='background:#f1f5f9; padding:20px; border-radius:10px; text-align:left; border:1px solid #cbd5e1; margin-bottom:20px;'><h3 style='margin-top:0; color:#ef4444;'>🔻 Fazer Sangria (Retirada da Gaveta)</h3><form action='/sangria' method='post' style='display:flex; flex-wrap:wrap; gap:10px;'><input name='valor' type='number' step='0.01' placeholder='Valor R$' class='input-padrao' style='flex:1; min-width:100px;' required><input name='desc' type='text' placeholder='Motivo (Ex: Gelo, Vale)' class='input-padrao' style='flex:2; min-width:180px;' required><button class='btn-acao' style='background:#ef4444; margin:0; width:100px;'>TIRAR</button></form></div><h3 style='text-align:left; margin-bottom:5px;'>Histórico de Retiradas</h3><div style='max-height:150px; overflow-y:auto; border:1px solid #cbd5e1; margin-bottom:20px;'><table><tr><th style='color:#0f172a'>Hora</th><th style='color:#0f172a'>Motivo</th><th style='color:#0f172a'>Valor</th></tr>{linhas_mov if linhas_mov else '<tr><td colspan=3 style=color:black;text-align:center;>Nenhuma retirada.</td></tr>'}</table></div><a href='/caixa_cego' class='btn-acao' style='background:#0ea5e9; font-size:18px; padding:20px;'>🔒 FECHAR TURNO / BATER CAIXA</a><br><a href='/central' style='color:gray'>Voltar ao Menu</a></div></div></body></html>"
+
+@app.post("/abrir_turno")
+async def abrir_turno(request: Request):
+    if request.session.get("role") not in ["admin", "gerente", "caixa"]: return RedirectResponse(url="/central")
+    f = await request.form()
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("INSERT INTO turnos (fundo_inicial, usuario_abertura) VALUES (:f, :u)"), {"f": float(f.get("fundo_inicial", "0")), "u": request.session.get("user")})
+    except: pass
+    return RedirectResponse(url="/caixa", status_code=303)
 
 @app.post("/sangria")
 async def registrar_sangria(request: Request):
@@ -286,30 +261,46 @@ async def registrar_sangria(request: Request):
 @app.get("/caixa_cego", response_class=HTMLResponse)
 async def tela_caixa_cego(request: Request):
     if request.session.get("role") not in ["admin", "gerente", "caixa"]: return RedirectResponse(url="/central")
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2 style='color:#0d9488;'>Fechamento Cego</h2><p style='color:#334155;'>Conte as notas da gaveta e digite abaixo o valor total exato do dinheiro físico.</p><form action='/resumo_whatsapp' method='post'><input class='input-padrao' name='dinheiro_gaveta' type='number' step='0.01' placeholder='R$ 0.00' required style='font-size:24px; text-align:center; padding:20px; font-weight:bold;'><button class='btn-acao' style='background:#10b981; font-size:18px; margin-top:20px;'>✔️ CONFIRMAR VALOR FÍSICO</button></form><br><a href='/caixa' style='color:gray'>Cancelar</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2 style='color:#0d9488;'>Fechamento Cego</h2><p style='color:#334155;'>Conte as notas da gaveta e digite abaixo o valor total exato do dinheiro físico (incluindo o Fundo Inicial).</p><form action='/resumo_whatsapp' method='post'><input class='input-padrao' name='dinheiro_gaveta' type='number' step='0.01' placeholder='R$ 0.00' required style='font-size:24px; text-align:center; padding:20px; font-weight:bold;'><button class='btn-acao' style='background:#10b981; font-size:18px; margin-top:20px;'>✔️ CONFIRMAR VALOR FÍSICO</button></form><br><a href='/caixa' style='color:gray'>Cancelar</a></div></div></body></html>"
 
 @app.post("/resumo_whatsapp", response_class=HTMLResponse)
 async def resumo_whatsapp(request: Request):
     if request.session.get("role") not in ["admin", "gerente", "caixa"]: return RedirectResponse(url="/central")
     f = await request.form()
     gaveta = float(f.get("dinheiro_gaveta", "0"))
-    hoje_str, hoje_br, usuario = date.today().strftime("%Y-%m-%d"), date.today().strftime("%d/%m/%Y"), request.session.get("user", "Desconhecido").upper()
+    usuario = request.session.get("user", "Desconhecido").upper()
+    
     with engine.connect() as conn:
-        pag_q = conn.execute(text(f"SELECT forma_pagamento, SUM(total_conta) as total FROM comandas WHERE CAST(data_fechamento AS DATE) = CAST('{hoje_str}' AS DATE) AND status = 'FECHADA' GROUP BY forma_pagamento")).fetchall()
+        turno = conn.execute(text("SELECT id, data_abertura, fundo_inicial FROM turnos WHERE status = 'ABERTO' ORDER BY id DESC LIMIT 1")).fetchone()
+        if not turno: return RedirectResponse(url="/caixa")
+        
+        pag_q = conn.execute(text(f"SELECT forma_pagamento, SUM(total_conta) as total, SUM(desconto) as tot_desc FROM comandas WHERE data_fechamento >= :inicio AND status = 'FECHADA' GROUP BY forma_pagamento"), {"inicio": turno.data_abertura}).fetchall()
         totais = {"DINHEIRO": 0.0, "PIX": 0.0, "C. CREDITO": 0.0, "C. DEBITO": 0.0}
-        for p in pag_q: totais[p.forma_pagamento] = float(p.total or 0)
-        mov_q = conn.execute(text(f"SELECT SUM(valor) as tot FROM caixa_movimentos WHERE CAST(data_registro AS DATE) = CAST('{hoje_str}' AS DATE) AND tipo = 'SANGRIA'")).fetchone()
+        tot_desconto = 0.0
+        for p in pag_q: 
+            totais[p.forma_pagamento] = float(p.total or 0)
+            tot_desconto += float(p.tot_desc or 0)
+            
+        mov_q = conn.execute(text(f"SELECT SUM(valor) as tot FROM caixa_movimentos WHERE data_registro >= :inicio AND tipo = 'SANGRIA'"), {"inicio": turno.data_abertura}).fetchone()
         tot_sangria = float(mov_q.tot or 0)
-        comissao_db = conn.execute(text(f"SELECT SUM(valor * 0.10) as tot FROM vendas_itens WHERE CAST(data_venda AS DATE) = CAST('{hoje_str}' AS DATE) AND status = 'FECHADA'")).fetchone()
+        
+        comissao_db = conn.execute(text(f"SELECT SUM(valor * 0.10) as tot FROM vendas_itens WHERE data_venda >= DATE(:inicio) AND status = 'FECHADA'"), {"inicio": turno.data_abertura}).fetchone()
         tot_comissao = float(comissao_db.tot or 0)
-    esperado = totais["DINHEIRO"] - tot_sangria
+        
+        conn.execute(text("UPDATE turnos SET status = 'FECHADO', data_fechamento = CURRENT_TIMESTAMP, usuario_fechamento = :u WHERE id = :t_id"), {"u": usuario, "t_id": turno.id})
+        conn.commit()
+        
+    fundo_inicial = float(turno.fundo_inicial or 0)
+    esperado = totais["DINHEIRO"] + fundo_inicial - tot_sangria
     dif = gaveta - esperado
     faturamento_bruto = sum(totais.values())
     faturamento_liq = faturamento_bruto - tot_comissao
     status_caixa = "✅ Bateu certinho! R$ 0.00" if dif == 0 else f"⚠️ Sobrou na gaveta: R$ {dif:.2f}" if dif > 0 else f"❌ FURO DE CAIXA: R$ {dif:.2f}"
-    mensagem = f"📊 *FECHAMENTO DE CAIXA*\n*Data:* {hoje_br}\n*Operador:* {usuario}\n\n*Vendas por Pagamento:*\n💵 Dinheiro: R$ {totais['DINHEIRO']:.2f}\n💳 Cartão: R$ {(totais['C. CREDITO'] + totais['C. DEBITO']):.2f}\n💠 PIX: R$ {totais['PIX']:.2f}\n\n*Movimentações:*\n🔻 Sangrias: R$ {tot_sangria:.2f}\n\n*Auditoria da Gaveta:*\nInformado: R$ {gaveta:.2f}\nDeveria ter: R$ {esperado:.2f}\n*Status:* {status_caixa}\n\n*Resumo Geral:*\n💰 Bruto: R$ {faturamento_bruto:.2f}\n💸 Comissões: R$ {tot_comissao:.2f}\n✅ *Líquido: R$ {faturamento_liq:.2f}*"
+    
+    mensagem = f"📊 *FECHAMENTO DE CAIXA*\n*Descontos Totais Concedidos:* R$ {tot_desconto:.2f}\n*Abertura:* {turno.data_abertura.strftime('%d/%m/%Y %H:%M')}\n*Fechamento:* {datetime.now().strftime('%d/%m/%Y %H:%M')}\n*Operador:* {usuario}\n\n*Vendas por Pagamento:*\n💵 Dinheiro: R$ {totais['DINHEIRO']:.2f}\n💳 Cartão: R$ {(totais['C. CREDITO'] + totais['C. DEBITO']):.2f}\n💠 PIX: R$ {totais['PIX']:.2f}\n\n*Movimentações (Gaveta):*\n💵 Fundo Inicial: R$ {fundo_inicial:.2f}\n🔻 Sangrias: R$ {tot_sangria:.2f}\n\n*Auditoria da Gaveta:*\nInformado: R$ {gaveta:.2f}\nDeveria ter: R$ {esperado:.2f}\n*Status:* {status_caixa}\n\n*Resumo Geral:*\n💰 Bruto Vendido: R$ {faturamento_bruto:.2f}\n💸 Comissões: R$ {tot_comissao:.2f}\n✅ *Líquido: R$ {faturamento_liq:.2f}*"
     zap_url = f"https://wa.me/?text={urllib.parse.quote(mensagem)}"
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center' style='max-width:600px;'><h2>Auditoria Concluída</h2><div style='background:#f1f5f9; padding:20px; border-radius:8px; text-align:left; color:#0f172a; font-family:monospace; font-size:14px; margin-bottom:20px; white-space:pre-wrap;'>{mensagem.replace('*', '<b>').replace('<b>', '</b>', 1)}</div><a href='{zap_url}' target='_blank' class='btn-acao' style='background:#25D366; font-size:18px; padding:20px;'>📱 ENVIAR RESUMO WHATSAPP</a><br><a href='/caixa' style='color:gray'>Voltar</a></div></div></body></html>"
+    
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center' style='max-width:600px;'><h2>Auditoria Concluída & Turno Fechado</h2><div style='background:#f1f5f9; padding:20px; border-radius:8px; text-align:left; color:#0f172a; font-family:monospace; font-size:14px; margin-bottom:20px; white-space:pre-wrap;'>{mensagem.replace('*', '<b>').replace('<b>', '</b>', 1)}</div><a href='{zap_url}' target='_blank' class='btn-acao' style='background:#25D366; font-size:18px; padding:20px;'>📱 ENVIAR RESUMO WHATSAPP</a><br><a href='/central' style='color:gray'>Voltar ao Menu Inicial</a></div></div></body></html>"
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str = "", prod: str = "", garcom_filtro: str = ""):
@@ -626,7 +617,7 @@ async def confirmar_fechamento(request: Request):
         with engine.begin() as conn: 
             c = conn.execute(text("SELECT c.nome_completo, p.total_conta FROM comandas p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE p.numero_comanda = :p AND p.status = 'ABERTA'"), {"p": p}).fetchone()
             if c:
-                conn.execute(text("UPDATE comandas SET status = 'FECHADA', forma_pagamento = :pag, data_fechamento = CURRENT_TIMESTAMP, nfe_solicitada = :nfe, cpf_nota = :cpf WHERE numero_comanda = :p AND status = 'ABERTA'"), {"p": p, "pag": pag, "nfe": bool(nfe), "cpf": cpf})
+                conn.execute(text("UPDATE comandas SET status = 'FECHADA', forma_pagamento = :pag, data_fechamento = CURRENT_TIMESTAMP, nfe_solicitada = :nfe, cpf_nota = :cpf, desconto = :desc WHERE numero_comanda = :p AND status = 'ABERTA'"), {"p": p, "pag": pag, "nfe": bool(nfe), "cpf": cpf, "desc": desc})
                 conn.execute(text("UPDATE vendas_itens SET status = 'FECHADA' WHERE comanda_num = :p AND status = 'ABERTA'"), {"p": p})
                 tot = (float(c.total_conta) * 1.1) - desc
                 txt = f"--------------------------------\n      SISTEMA JPMS\nFECHAMENTO DE CONTA\nCOMANDA/MESA: {p}\nTOTAL: R$ {tot:.2f}\nPAGTO: {pag}\n--------------------------------\n"

@@ -31,17 +31,17 @@ IMAGENS_CAT = {
 with engine.begin() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS clientes (id SERIAL PRIMARY KEY, nome_completo TEXT NOT NULL, cpf TEXT UNIQUE NOT NULL, data_nascimento DATE, contato TEXT, email TEXT);
-        CREATE TABLE IF NOT EXISTS pulseiras (id SERIAL PRIMARY KEY, numero_pulseira TEXT NOT NULL, cliente_cpf TEXT REFERENCES clientes(cpf), total_conta DECIMAL(10,2) DEFAULT 0.00, status TEXT DEFAULT 'ABERTA', forma_pagamento TEXT, data_fechamento TIMESTAMP, nfe_solicitada BOOLEAN DEFAULT FALSE, cpf_nota TEXT);
+        CREATE TABLE IF NOT EXISTS pulseiras (id SERIAL PRIMARY KEY, numero_pulseira TEXT NOT NULL, cliente_cpf TEXT REFERENCES clientes(cpf), total_conta DECIMAL(10,2) DEFAULT 0.00, status TEXT DEFAULT 'ABERTA', forma_pagamento TEXT, data_fechamento TIMESTAMP, nfe_solicitada BOOLEAN DEFAULT FALSE, cpf_nota TEXT, desconto DECIMAL(10,2) DEFAULT 0.00);
         CREATE TABLE IF NOT EXISTS vendas_itens (id SERIAL PRIMARY KEY, pulseira_num TEXT, item_nome TEXT, valor DECIMAL(10,2), data_venda DATE DEFAULT CURRENT_DATE, hora_venda TIME DEFAULT CURRENT_TIME, status TEXT DEFAULT 'ABERTA', garcom TEXT, comissao_status TEXT DEFAULT 'PENDENTE');
         CREATE TABLE IF NOT EXISTS produtos (id SERIAL PRIMARY KEY, nome TEXT UNIQUE NOT NULL, categoria TEXT DEFAULT 'OUTROS', preco DECIMAL(10,2) DEFAULT 0.00, estoque INT DEFAULT 0);
         CREATE TABLE IF NOT EXISTS fila_impressao (id SERIAL PRIMARY KEY, conteudo TEXT, status TEXT DEFAULT 'PENDENTE', data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
         CREATE TABLE IF NOT EXISTS historico_estoque (id SERIAL PRIMARY KEY, produto_nome TEXT, qtd_adicionada INT, data_entrada DATE DEFAULT CURRENT_DATE);
         CREATE TABLE IF NOT EXISTS usuarios (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS caixa_movimentos (id SERIAL PRIMARY KEY, tipo TEXT, valor DECIMAL(10,2), descricao TEXT, data_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP, usuario TEXT);
+        CREATE TABLE IF NOT EXISTS turnos (id SERIAL PRIMARY KEY, data_abertura TIMESTAMP DEFAULT CURRENT_TIMESTAMP, data_fechamento TIMESTAMP, fundo_inicial DECIMAL(10,2) DEFAULT 0.00, status TEXT DEFAULT 'ABERTO', usuario_abertura TEXT, usuario_fechamento TEXT);
     """))
 
 MIGRACOES = [
-    "CREATE TABLE IF NOT EXISTS turnos (id SERIAL PRIMARY KEY, data_abertura TIMESTAMP DEFAULT CURRENT_TIMESTAMP, data_fechamento TIMESTAMP, fundo_inicial DECIMAL(10,2) DEFAULT 0.00, status TEXT DEFAULT 'ABERTO', usuario_abertura TEXT, usuario_fechamento TEXT);",
     "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS nfe_solicitada BOOLEAN DEFAULT FALSE;",
     "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS cpf_nota TEXT;",
     "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';",
@@ -88,14 +88,21 @@ CSS = f"""
     .bg-red {{ background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border-color: #5a0407; opacity: 0.9; }}
     .prod-card b {{ font-size: 14px; margin-bottom: 8px; text-shadow: 1px 1px 2px rgba(0,0,0,0.6); line-height: 1.2; }}
     .prod-card span {{ font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 5px; }}
+    
     .comanda-lateral {{ width: 340px; background: white; color: black; border-left: 5px solid #d31a21; display: flex; flex-direction: column; }}
     .comanda-header {{ background: #d31a21; color: white; padding: 15px; font-weight: bold; text-align: center; font-size: 18px; }}
     .comanda-body {{ flex: 1; overflow-y: auto; padding: 15px; background: #f9f9f9; }}
     .secao-titulo {{ font-size: 12px; color: #666; text-transform: uppercase; font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 10px; padding-bottom: 5px; }}
     .item-linha {{ display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; border-bottom: 1px dashed #ddd; padding-bottom: 5px; align-items: center; color: #333; }}
     .comanda-footer {{ padding: 15px; background: white; border-top: 1px solid #ccc; }}
+    
     .btn-acao {{ display: block; width: 100%; padding: 15px; margin-bottom: 8px; border: none; border-radius: 5px; font-weight: bold; color: white; cursor: pointer; text-align: center; text-decoration: none; font-size: 14px; background: #062b5e; }}
     .btn-acao:hover {{ background: #0d4b9c; }}
+    
+    /* CSS DO TECLADO NUMÉRICO BONITÃO */
+    .btn-teclado {{ background: #a71118; color: white; border: 1px solid #7a090f; padding: 15px; font-size: 22px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.1s; box-shadow: 0 5px 0px #7a090f; }}
+    .btn-teclado:active {{ transform: translateY(5px); box-shadow: 0 0px 0px transparent; }}
+    
     .container-center {{ display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; overflow-y: auto; }}
     .card-center {{ background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 650px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); margin: auto; }}
     .input-padrao {{ width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; box-sizing: border-box; background: white; color: #333; }}
@@ -172,12 +179,12 @@ async def central(request: Request):
     b = ""
     if not turno_aberto:
         b += f"""
-        <div style='background:#f4f4f4; padding:25px; border-radius:10px; border:3px dashed #d31a21; margin-bottom:20px;'>
+        <div style='background:#fef3c7; border:3px dashed #e67e22; padding:25px; border-radius:10px; margin-bottom:20px;'>
             <h3 style='color:#d31a21; margin-top:0; font-size:22px;'>⚠️ O EVENTO / CAIXA ESTÁ FECHADO</h3>
-            <p style='color:#333; font-weight:bold; margin-bottom:15px;'>Para acessar as vendas e comandas, abra o evento abaixo:</p>
+            <p style='color:#333; margin-bottom:15px; font-weight:bold;'>Inicie o caixa preenchendo o fundo inicial para habilitar as vendas:</p>
             <form action='/abrir_turno' method='post' style='margin:0;'>
                 <label style='font-weight:bold; color:#062b5e; display:block; text-align:left;'>Fundo de Caixa (R$):</label>
-                <input type='number' step='0.01' name='fundo_inicial' class='input-padrao' required placeholder='0.00' inputmode='numeric' style='font-size:24px; font-weight:bold; text-align:center;'>
+                <input type='number' step='0.01' name='fundo_inicial' class='input-padrao' required placeholder='0.00' style='font-size:24px; font-weight:bold; text-align:center;'>
                 <button class='btn-acao' style='background:#28a745; font-size:20px; padding:20px; margin-top:15px;'>🟢 ABRIR EVENTO AGORA</button>
             </form>
         </div>
@@ -188,9 +195,9 @@ async def central(request: Request):
             b += "<a href='/usuarios' class='btn-acao' style='background:#9b59b6'>👥 GERENCIAR USUÁRIOS</a>"
     else:
         if role in ["admin", "gerente", "garcom", "caixa", "portaria"]:
-            b += f"<a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO / COMANDA</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a>"
+            b += f"<a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CLIENTE / COMANDA</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR COMANDA</a>"
         if role in ["admin", "gerente", "garcom", "caixa"]:
-            b += f"<a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / LANÇAR ITENS</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a><a href='/caixa' class='btn-acao' style='background:#e67e22'>💰 GESTÃO DO EVENTO (CAIXA)</a>"
+            b += f"<a href='/vendas' class='btn-acao' style='background:#28a745; padding:20px; font-size:18px;'>🛒 LANÇAR ITENS (VENDA RÁPIDA)</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a><a href='/caixa' class='btn-acao' style='background:#e67e22'>💰 GESTÃO DO EVENTO (CAIXA)</a>"
         if role in ["admin", "gerente"]:
             b += "<a href='/comissoes' class='btn-acao' style='background:#8e44ad'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#062b5e'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a>"
             b += "<a href='/baixar_conector' class='btn-acao' style='background:#f39c12; color:black;'>📥 BAIXAR CONECTOR DE IMPRESSORA</a>"
@@ -426,8 +433,8 @@ async def tela_estoque(request: Request):
                 </form>
                 <form action='/editar_preco' method='post' style='margin:0; display:flex;'>
                     <input type='hidden' name='nome' value='{r.nome}'>
-                    <input type='number' step='0.01' name='novo_preco' class='input-padrao' style='width:60px; padding:5px; margin:0;' required placeholder='Preço'>
-                    <button class='btn-acao' style='background:#f39c12; padding:8px; margin:0;' title='Editar Preço'>✏️</button>
+                    <input type='number' step='0.01' name='novo_preco' class='input-padrao' style='width:70px; padding:5px; margin:0;' required placeholder='Preço'>
+                    <button class='btn-acao' style='background:#f39c12; padding:8px; margin:0; margin-left:2px;' title='Editar Preço'>✏️</button>
                 </form>
                 <form action='/excluir_produto' method='post' style='margin:0;' onsubmit='return confirm(\"Excluir item definitivamente?\");'>
                     <input type='hidden' name='nome' value='{r.nome}'>
@@ -556,9 +563,44 @@ async def vendas(request: Request, cat: str = "CHOPP", p: str = ""):
             for r in conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall():
                 btn_estorno = f"<form action='/estorno' method='post' style='display:inline; margin:0;'><input type='hidden' name='p' value='{p}'><input type='hidden' name='i' value='{r.item_nome}'><button style='background:none;border:none;color:#d31a21;font-weight:bold;cursor:pointer;margin-left:8px;font-size:16px;' title='Estornar 1x'>✖</button></form>" if role in ['admin', 'gerente'] else ""
                 itens_html += f"<div class='item-linha'><span style='display:flex;align-items:center;'>{r.qtd}x {r.item_nome} {btn_estorno}</span><span>R$ {float(r.tot or 0):.2f}</span></div>"
-    comanda_display = f"""<div class='comanda-header'><div style='font-size:13px;'>MESA / COMANDA:</div><input type='number' inputmode='numeric' pattern='[0-9]*' id='input-pulseira' class='input-padrao' style='text-align:center; font-weight:bold; font-size:20px;' value='{p}'><button class='btn-acao' style='background:white; color:#d31a21;' onclick='window.location.href=\"/vendas?cat={cat}&p=\"+document.getElementById(\"input-pulseira\").value'>ACESSAR</button></div><div class='comanda-body'><div class='secao-titulo'>Consumo</div>{itens_html}<hr><div class='secao-titulo'>Novo Pedido</div><div id='novo-pedido'></div></div><div class='comanda-footer'><div style='display:flex; justify-content:space-between; font-weight:bold;'><span>Subtotal:</span><span id='tot-pedido'>R$ 0.00</span></div><br><button class='btn-acao' style='background:#28a745;' onclick='enviarPedido()'>LANÇAR PEDIDO</button><a href='/central' class='btn-acao' style='background:#333'>Voltar</a></div>"""
+                
+    comanda_display = f"""
+    <div class='comanda-header' style='padding: 10px;'>
+        <div style='font-size:14px; margin-bottom:5px; color:white;'>Nº DA COMANDA:</div>
+        <input type='text' id='input-pulseira' class='input-padrao' style='text-align:center; font-weight:bold; font-size:24px; color:#d31a21; margin-bottom:10px;' value='{p}' readonly>
+        <div style='display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; padding: 0 5px 5px 5px;'>
+            <button class='btn-teclado' onclick='addNum(1)'>1</button><button class='btn-teclado' onclick='addNum(2)'>2</button><button class='btn-teclado' onclick='addNum(3)'>3</button>
+            <button class='btn-teclado' onclick='addNum(4)'>4</button><button class='btn-teclado' onclick='addNum(5)'>5</button><button class='btn-teclado' onclick='addNum(6)'>6</button>
+            <button class='btn-teclado' onclick='addNum(7)'>7</button><button class='btn-teclado' onclick='addNum(8)'>8</button><button class='btn-teclado' onclick='addNum(9)'>9</button>
+            <button class='btn-teclado' style='background:#e67e22; border-color:#d35400; box-shadow: 0 5px 0px #d35400;' onclick='delNum()'>⌫</button>
+            <button class='btn-teclado' onclick='addNum(0)'>0</button>
+            <button class='btn-teclado' style='background:#28a745; border-color:#1e7e34; box-shadow: 0 5px 0px #1e7e34;' onclick='irComanda()'>OK</button>
+        </div>
+    </div>
+    <div class='comanda-body'>
+        <div class='secao-titulo'>Consumo</div>{itens_html}<hr><div class='secao-titulo'>Novo Pedido</div><div id='novo-pedido'></div>
+    </div>
+    <div class='comanda-footer'>
+        <div style='display:flex; justify-content:space-between; font-weight:bold;'><span>Subtotal:</span><span id='tot-pedido'>R$ 0.00</span></div><br>
+        <button class='btn-acao' style='background:#28a745;' onclick='enviarPedido()'>LANÇAR PEDIDO</button>
+        <a href='/central' class='btn-acao' style='background:#333'>Voltar ao Início</a>
+    </div>
+    """
     botoes_menu = "".join([f"<a href='/vendas?cat={k}&p={p}' class='btn-menu'><span style='background:white; border-radius:50%; width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; box-shadow: 0 2px 4px rgba(0,0,0,0.5);'><img src='{IMAGENS_CAT.get(k, '')}' style='width:20px; height:20px; object-fit:contain;'></span> {k}</a>" for k in IMAGENS_CAT.keys()])
-    return f"""<html><head>{CSS}<script>const p_num = '{p}'; let cart = JSON.parse(sessionStorage.getItem('cart_'+p_num)) || []; function add(n,v,e) {{ if(!p_num) return alert('Acesse uma comanda ou mesa!'); if (e <= 0 || cart.filter(x => x.n === n).length >= e) return alert('❌ Sem estoque!'); cart.push({{n,v}}); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function render() {{ let html = ''; let t = 0; cart.forEach((i,idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:#333;'>X</b></span></div>`; t += i.v; }}); document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = 'R$ '+t.toFixed(2); }} function rem(idx) {{ cart.splice(idx,1); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} function enviarPedido() {{ if(!p_num || cart.length === 0) return; let f = document.createElement('form'); f.method = 'POST'; f.action = '/lancar_pedido'; let i1 = document.createElement('input'); i1.name = 'p'; i1.value = p_num; f.appendChild(i1); let i2 = document.createElement('input'); i2.name = 'itens'; i2.value = JSON.stringify(cart); f.appendChild(i2); document.body.appendChild(f); sessionStorage.removeItem('cart_'+p_num); f.submit(); }} window.onload = render;</script></head><body><div class='layout-vendas'><div class='menu-lateral'>{botoes_menu}</div><div class='main-area'>{IMG_LOGO}<h2>{cat}</h2><div class='grid-produtos'>{prods}</div></div><div class='comanda-lateral'>{comanda_display}</div></div></body></html>"""
+    
+    js_scripts = f"""<script>
+    const p_num = '{p}'; let cart = JSON.parse(sessionStorage.getItem('cart_'+p_num)) || []; 
+    function addNum(n) {{ document.getElementById('input-pulseira').value += n; }}
+    function delNum() {{ let v = document.getElementById('input-pulseira').value; document.getElementById('input-pulseira').value = v.slice(0, -1); }}
+    function irComanda() {{ window.location.href = "/vendas?cat={cat}&p=" + document.getElementById('input-pulseira').value; }}
+    function add(n,v,e) {{ if(!p_num) return alert('Acesse uma comanda primeiro pelo teclado!'); if (e <= 0 || cart.filter(x => x.n === n).length >= e) return alert('❌ Sem estoque!'); cart.push({{n,v}}); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} 
+    function render() {{ let html = ''; let t = 0; cart.forEach((i,idx) => {{ html += `<div class='item-linha' style='color:#d31a21; font-weight:bold;'><span>${{i.n}}</span><span>R$ ${{i.v.toFixed(2)}} <b onclick='rem(${{idx}})' style='cursor:pointer; color:#333;'>X</b></span></div>`; t += i.v; }}); document.getElementById('novo-pedido').innerHTML = html; document.getElementById('tot-pedido').innerText = 'R$ '+t.toFixed(2); }} 
+    function rem(idx) {{ cart.splice(idx,1); sessionStorage.setItem('cart_'+p_num, JSON.stringify(cart)); render(); }} 
+    function enviarPedido() {{ if(!p_num || cart.length === 0) return; let f = document.createElement('form'); f.method = 'POST'; f.action = '/lancar_pedido'; let i1 = document.createElement('input'); i1.name = 'p'; i1.value = p_num; f.appendChild(i1); let i2 = document.createElement('input'); i2.name = 'itens'; i2.value = JSON.stringify(cart); f.appendChild(i2); document.body.appendChild(f); sessionStorage.removeItem('cart_'+p_num); f.submit(); }} 
+    window.onload = render;
+    </script>"""
+    
+    return f"""<html><head>{CSS}{js_scripts}</head><body><div class='layout-vendas'><div class='menu-lateral'>{botoes_menu}</div><div class='main-area'>{IMG_LOGO}<h2>{cat}</h2><div class='grid-produtos'>{prods}</div></div><div class='comanda-lateral'>{comanda_display}</div></div></body></html>"""
 
 @app.post("/estorno")
 async def estornar_item(request: Request):
@@ -624,7 +666,7 @@ async def fechar_conta(request: Request, q: str = ""):
                 </div>
                 """
                 res = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; color:#333; margin-top:20px; text-align:left;'>
-                    <h3 style='text-align:center; margin-top:0;'>{query.nome_completo}</h3><p style='text-align:center;'>Comanda/Mesa: <b>{query.numero_pulseira}</b></p>
+                    <h3 style='text-align:center; margin-top:0;'>{query.nome_completo}</h3><p style='text-align:center;'>Comanda: <b>{query.numero_pulseira}</b></p>
                     <div style='background:white; padding:15px; border-radius:8px; max-height:220px; overflow-y:auto; border:1px solid #ccc;'>{lista}</div>
                     <div style='padding-top:15px; font-size:16px;'>
                         <div class='item-linha'><span>Saldo Devedor S/ Tx:</span><span>R$ {subt:.2f}</span></div>
@@ -646,7 +688,7 @@ async def fechar_conta(request: Request, q: str = ""):
                     </form>
                     <script>function calcDiv() {{ let subt = {subt}; let taxa = {taxa}; let desc = parseFloat(document.getElementById('input_desconto').value.replace(',', '.')) || 0; let div = parseInt(document.getElementById('divisores').value) || 1; let totFinal = Math.max(subt + taxa - desc, 0); document.getElementById('tot_final').innerText = 'R$ ' + totFinal.toFixed(2); document.getElementById('val_pessoa').innerText = 'R$ ' + (totFinal / div).toFixed(2); document.getElementById('input_div').value = div; document.getElementById('input_desc_form').value = desc; }}</script>
                 </div>"""
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Fechar Conta</h2><form method='get'><input type='number' inputmode='numeric' pattern='[0-9]*' class='input-padrao' name='q' placeholder='Nº Comanda/Mesa ou CPF' value='{q}' required><button class='btn-acao'>CONSULTAR CONTA</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Fechar Conta</h2><form method='get'><input type='number' inputmode='numeric' pattern='[0-9]*' class='input-padrao' name='q' placeholder='Nº Comanda ou CPF' value='{q}' required><button class='btn-acao'>CONSULTAR CONTA</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
 
 @app.post("/parcial")
 async def registrar_parcial(request: Request):

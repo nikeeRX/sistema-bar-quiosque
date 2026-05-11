@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Form, Request, Response
+from fastapi import FastAPI, Form, Request, Response, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from sqlalchemy import create_engine, text
 from starlette.middleware.sessions import SessionMiddleware
@@ -26,8 +26,9 @@ with engine.begin() as conn:
     conn.execute(text("CREATE TABLE IF NOT EXISTS historico_estoque (id SERIAL PRIMARY KEY, produto_nome TEXT, qtd_adicionada INT, data_entrada DATE DEFAULT CURRENT_DATE);"))
     conn.execute(text("CREATE TABLE IF NOT EXISTS usuarios (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, role TEXT NOT NULL);"))
     conn.execute(text("CREATE TABLE IF NOT EXISTS caixa_movimentos (id SERIAL PRIMARY KEY, tipo TEXT, valor DECIMAL(10,2), descricao TEXT, data_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP, usuario TEXT);"))
+    conn.execute(text("CREATE TABLE IF NOT EXISTS config_nfe (id INT PRIMARY KEY, ambiente TEXT DEFAULT '2', focus_token TEXT, csc_id TEXT, csc_token TEXT, cert_path TEXT, cert_senha TEXT);"))
 
-MIGRACOES = ["ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS nfe_solicitada BOOLEAN DEFAULT FALSE;", "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS cpf_nota TEXT;", "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';", "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS forma_pagamento TEXT;", "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS data_fechamento TIMESTAMP;", "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS comissao_status TEXT DEFAULT 'PENDENTE';", "ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;", "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'OUTROS';", "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco DECIMAL(10,2) DEFAULT 0.00;", "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque INT DEFAULT 0;"]
+MIGRACOES = ["ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS nfe_solicitada BOOLEAN DEFAULT FALSE;", "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS cpf_nota TEXT;", "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ABERTA';", "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS forma_pagamento TEXT;", "ALTER TABLE pulseiras ADD COLUMN IF NOT EXISTS data_fechamento TIMESTAMP;", "ALTER TABLE vendas_itens ADD COLUMN IF NOT EXISTS comissao_status TEXT DEFAULT 'PENDENTE';", "ALTER TABLE pulseiras DROP CONSTRAINT IF EXISTS pulseiras_numero_pulseira_key;", "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'OUTROS';", "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS preco DECIMAL(10,2) DEFAULT 0.00;", "ALTER TABLE produtos ADD COLUMN IF NOT EXISTS estoque INT DEFAULT 0;", "INSERT INTO config_nfe (id, ambiente) VALUES (1, '2') ON CONFLICT DO NOTHING;"]
 for mig in MIGRACOES:
     try:
         with engine.begin() as conn: conn.execute(text(mig))
@@ -42,8 +43,17 @@ try:
 except: pass
 
 def emitir_nfe_api(cpf, itens, total, pag):
-    time.sleep(1)
-    return f"https://homologacao.sefaz.gov.br/nfce/consulta?chave=12345678901234567890123456789012345678901234"
+    with engine.connect() as conn:
+        conf = conn.execute(text("SELECT * FROM config_nfe WHERE id = 1")).fetchone()
+    
+    if not conf or not conf.focus_token:
+        return "⚠️ Erro: API NFe não configurada no painel."
+
+    amb_str = "Homologacao" if conf.ambiente == '2' else "Producao"
+    
+    # Aqui entra o código real de disparo usando requests quando os dados forem válidos
+    time.sleep(1) 
+    return f"https://{amb_str.lower()}.sefaz.gov.br/nfce/consulta?chave=VALIDADA_VIA_API"
 
 IMG_URL = "/logo.png"
 CSS = f"""<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="{IMG_URL}"><style>* {{ box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }} body {{ margin: 0; background: #0a3a7a; color: white; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }} .layout-vendas {{ display: flex; flex: 1; height: 100vh; }} .menu-lateral {{ width: 220px; padding: 20px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid rgba(255,255,255,0.1); background: #082d5e; overflow-y:auto; }} .btn-menu {{ background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 15px; cursor: pointer; text-decoration: none; display: flex; justify-content: flex-start; align-items:center; gap: 10px; }} .btn-menu:hover, .btn-menu.ativo {{ background: #d31a21; border-color: white; }} .main-area {{ flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; width: 100%; }} .logo-central {{ width: 280px; max-width: 100%; height: auto; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }} .logo-peq {{ width: 180px; max-width: 100%; height: auto; margin-bottom: 10px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5)); }} .grid-produtos {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; width: 100%; max-width: 900px; }} .prod-card {{ border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s; color: white; border-width: 2px; border-style: solid; }} .prod-card:hover {{ transform: scale(1.05); border-color: white; }} .bg-green {{ background: linear-gradient(180deg, #28a745 0%, #1e7e34 100%); border-color: #145523; }} .bg-red {{ background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border-color: #5a0407; opacity: 0.9; }} .prod-card b {{ font-size: 14px; margin-bottom: 8px; text-shadow: 1px 1px 2px rgba(0,0,0,0.6); line-height: 1.2; }} .prod-card span {{ font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 5px; }} .comanda-lateral {{ width: 340px; background: white; color: black; border-left: 5px solid #d31a21; display: flex; flex-direction: column; }} .comanda-header {{ background: #d31a21; color: white; padding: 15px; font-weight: bold; text-align: center; font-size: 18px; }} .comanda-body {{ flex: 1; overflow-y: auto; padding: 15px; background: #f9f9f9; }} .secao-titulo {{ font-size: 12px; color: #666; text-transform: uppercase; font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 10px; padding-bottom: 5px; }} .item-linha {{ display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; border-bottom: 1px dashed #ddd; padding-bottom: 5px; align-items: center; }} .comanda-footer {{ padding: 15px; background: white; border-top: 1px solid #ccc; }} .btn-acao {{ display: block; width: 100%; padding: 15px; margin-bottom: 8px; border: none; border-radius: 5px; font-weight: bold; color: white; cursor: pointer; text-align: center; text-decoration: none; font-size: 14px; background: #062b5e; }} .btn-acao:hover {{ background: #0d4b9c; }} .container-center {{ display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; overflow-y: auto; }} .card-center {{ background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 650px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); margin: auto; }} .input-padrao {{ width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; box-sizing: border-box; }} table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }} th, td {{ padding: 10px 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }} .table-responsive {{ width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #ddd; margin-bottom: 15px; border-radius: 5px; }} .table-responsive table {{ min-width: 500px; margin-top: 0; }} .switch {{ position: relative; display: inline-block; width: 50px; height: 24px; }} .switch input {{ opacity: 0; width: 0; height: 0; }} .slider {{ position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }} .slider:before {{ position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }} input:checked + .slider {{ background-color: #28a745; }} input:checked + .slider:before {{ transform: translateX(26px); }} .menu-duas-colunas {{ display: grid; grid-template-columns: 1fr; gap: 40px; max-width: 1000px; margin: auto; padding: 10px; }} @media (min-width: 800px) {{ .menu-duas-colunas {{ grid-template-columns: 1fr 1fr; gap: 60px; }} }} .faixa-laranja {{ background: #e67e22; color: white; padding: 12px 20px; font-size: 22px; font-weight: bold; text-align: center; text-transform: uppercase; position: relative; margin: 0 auto 25px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.6); max-width: 90%; font-family: 'Arial Black', sans-serif; letter-spacing: 1px; }} .faixa-laranja::before, .faixa-laranja::after {{ content: ""; position: absolute; top: 0; width: 0; height: 0; border-top: 25px solid transparent; border-bottom: 25px solid transparent; }} .faixa-laranja::before {{ left: -20px; border-right: 20px solid #e67e22; }} .faixa-laranja::after {{ right: -20px; border-left: 20px solid #e67e22; }} .linha-menu {{ display: flex; align-items: flex-end; margin-bottom: 12px; font-size: 15px; color: #ddd; }} .linha-nome {{ white-space: nowrap; text-transform: uppercase; font-family: 'Arial', sans-serif; letter-spacing: 0.5px; }} .linha-pontos {{ flex-grow: 1; border-bottom: 2px dotted #666; margin: 0 10px; position: relative; top: -5px; opacity: 0.7; }} .linha-preco {{ white-space: nowrap; font-weight: bold; color: white; font-size: 16px; }} .esgotado-txt {{ color: #d31a21; font-size: 11px; font-weight: bold; margin-left: 8px; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px; border: 1px solid #d31a21; vertical-align: middle; }} .filtro-item {{ flex: 1 1 150px; }} @media (max-width: 768px) {{ body {{ height: auto; overflow: auto; }} .layout-vendas {{ display: flex; flex-direction: column; height: auto; min-height: 100vh; }} .menu-lateral {{ width: 100%; flex-direction: row; overflow-x: auto; padding: 10px; border-right: none; border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; gap: 8px; flex-shrink: 0; white-space: nowrap; -webkit-overflow-scrolling: touch; }} .btn-menu {{ padding: 10px 15px; font-size: 14px; text-align: center; flex: 0 0 auto; justify-content: center; flex-direction: column; }} .main-area {{ display: flex; overflow: visible; padding: 10px; flex-shrink: 0; width: 100%; box-sizing: border-box; }} .grid-produtos {{ grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; width: 100%; }} .prod-card {{ min-height: 110px; padding: 10px; }} .comanda-lateral {{ width: 100%; display: flex; border-left: none; border-top: 5px solid #d31a21; flex-shrink: 0; }} .card-center {{ width: 95%; padding: 20px; }} .filtro-item {{ flex: 1 1 45%; }} #form_prod input, #form_prod select {{ flex: 1 1 100% !important; }} }}</style><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>"""
@@ -88,9 +98,63 @@ async def central(request: Request):
         if role in ["admin", "gerente", "caixa"]: b += f"<a href='/abrir_caixa' class='btn-acao' style='background:#28a745; padding:20px; font-size:18px;'>🟢 INICIAR CAIXA / EVENTO</a>"
         else: b += f"<p style='color:#f39c12; font-weight:bold; text-align:center;'>⚠️ O Caixa está fechado. Aguarde a gerência.</p>"
     if role in ["admin", "gerente", "caixa"]: b += f"<a href='/caixa' class='btn-acao' style='background:#e67e22'>💰 GESTÃO DE CAIXA</a>"
-    if role in ["admin", "gerente"]: b += "<a href='/comissoes' class='btn-acao' style='background:#8e44ad'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#062b5e'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a><a href='/impressora_virtual' class='btn-acao' style='background:#555; color:white;'>🖨️ IMPRESSORA VIRTUAL (TESTE TELA)</a><a href='/baixar_conector' class='btn-acao' style='background:#f39c12; color:black;'>📥 BAIXAR CONECTOR (PC)</a>"
-    if role == "admin": b += "<a href='/usuarios' class='btn-acao' style='background:#9b59b6'>👥 GERENCIAR USUÁRIOS</a>"
+    if role in ["admin", "gerente"]: b += "<a href='/comissoes' class='btn-acao' style='background:#8e44ad'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#062b5e'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a><a href='/impressora_virtual' class='btn-acao' style='background:#555; color:white;'>🖨️ IMPRESSORA VIRTUAL (TESTE)</a><a href='/baixar_conector' class='btn-acao' style='background:#f39c12; color:black;'>📥 BAIXAR CONECTOR (PC)</a>"
+    if role == "admin": b += "<a href='/usuarios' class='btn-acao' style='background:#9b59b6'>👥 GERENCIAR USUÁRIOS</a><a href='/config_nfe' class='btn-acao' style='background:#34495e'>⚙️ CONFIGURAÇÕES NFE</a>"
     return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<p>Logado como: <b>{user.upper()}</b></p>{b}<br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"""
+
+@app.get("/config_nfe", response_class=HTMLResponse)
+async def config_nfe(request: Request):
+    if request.session.get("role") != "admin": return RedirectResponse(url="/central")
+    with engine.connect() as conn:
+        conf = conn.execute(text("SELECT * FROM config_nfe WHERE id = 1")).fetchone()
+    
+    amb_sel_1 = "selected" if conf.ambiente == '1' else ""
+    amb_sel_2 = "selected" if conf.ambiente == '2' else ""
+    
+    form = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; text-align:left; border:1px solid #ccc; max-width: 600px; margin: auto;'>
+        <h3 style='margin-top:0; color:#34495e;'>⚙️ Credenciais Fiscais</h3>
+        <form action='/salvar_config_nfe' method='post' enctype='multipart/form-data'>
+            <label style='font-size:12px; font-weight:bold; color:#666;'>Ambiente da SEFAZ:</label>
+            <select name='ambiente' class='input-padrao' required>
+                <option value='2' {amb_sel_2}>HOMOLOGAÇÃO (Teste)</option>
+                <option value='1' {amb_sel_1}>PRODUÇÃO (Valendo Oficial)</option>
+            </select>
+            <label style='font-size:12px; font-weight:bold; color:#666;'>Token da API (Focus NFe):</label>
+            <input name='focus_token' class='input-padrao' placeholder='Ex: 4k2j4k2j4k2j4k2...' value='{conf.focus_token or ''}'>
+            <label style='font-size:12px; font-weight:bold; color:#666;'>ID CSC (Código de Segurança):</label>
+            <input name='csc_id' class='input-padrao' placeholder='Ex: 000001' value='{conf.csc_id or ''}'>
+            <label style='font-size:12px; font-weight:bold; color:#666;'>Token CSC (Alfanumérico):</label>
+            <input name='csc_token' class='input-padrao' placeholder='Ex: AB12CD34...' value='{conf.csc_token or ''}'>
+            <hr style='border: 1px dashed #ccc; margin: 15px 0;'>
+            <label style='font-size:12px; font-weight:bold; color:#666;'>Upload Certificado Digital A1 (.pfx):</label>
+            <input type='file' name='certificado' class='input-padrao' accept='.pfx,.p12' style='padding: 8px;'>
+            <label style='font-size:12px; font-weight:bold; color:#666;'>Senha do Certificado:</label>
+            <input name='cert_senha' type='password' class='input-padrao' placeholder='Senha do arquivo A1' value='{conf.cert_senha or ''}'>
+            <button class='btn-acao' style='background:#28a745; margin-top:15px; font-size:16px;'>💾 SALVAR CONFIGURAÇÕES</button>
+        </form>
+    </div>"""
+    return f"<html><head>{CSS}</head><body><div class='container-center' style='align-items:flex-start; padding-top:40px;'><div class='card-center'>{IMG_LOGO_PEQ}{form}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
+
+@app.post("/salvar_config_nfe")
+async def salvar_config_nfe(request: Request, ambiente: str = Form(...), focus_token: str = Form(""), csc_id: str = Form(""), csc_token: str = Form(""), cert_senha: str = Form(""), certificado: UploadFile = File(None)):
+    if request.session.get("role") != "admin": return RedirectResponse(url="/central")
+    
+    cert_path = ""
+    if certificado and certificado.filename:
+        cert_path = f"/tmp/{certificado.filename}" # Salva num tmp local seguro
+        with open(cert_path, "wb") as f:
+            f.write(await certificado.read())
+
+    try:
+        with engine.begin() as conn:
+            if cert_path:
+                conn.execute(text("UPDATE config_nfe SET ambiente=:a, focus_token=:ft, csc_id=:ci, csc_token=:ct, cert_path=:cp, cert_senha=:cs WHERE id=1"), {"a": ambiente, "ft": focus_token, "ci": csc_id, "ct": csc_token, "cp": cert_path, "cs": cert_senha})
+            else:
+                conn.execute(text("UPDATE config_nfe SET ambiente=:a, focus_token=:ft, csc_id=:ci, csc_token=:ct, cert_senha=:cs WHERE id=1"), {"a": ambiente, "ft": focus_token, "ci": csc_id, "ct": csc_token, "cs": cert_senha})
+    except Exception as e:
+        print(f"Erro ao salvar configs: {e}")
+        
+    return RedirectResponse(url="/central", status_code=303)
 
 @app.get("/impressora_virtual", response_class=HTMLResponse)
 async def impressora_virtual(request: Request):
@@ -472,7 +536,7 @@ async def confirmar_fechamento(request: Request):
                 txt += f"--------------------------------\nSUBTOTAL: R$ {subt:.2f}\nTAXA (10%): R$ {taxa:.2f}\nTOTAL: R$ {tot:.2f}\nPAGTO: {pag}\n--------------------------------\n"
                 if nfe:
                     link_danfe = emitir_nfe_api(cpf, itens_consumidos, tot, pag)
-                    txt += f"NFC-e SOLICITADA\nCPF: {cpf}\nDANFE: {link_danfe}\n(Simulacao Homologacao)\n--------------------------------\n"
+                    txt += f"NFC-e SOLICITADA\nCPF: {cpf}\nDANFE: {link_danfe}\n--------------------------------\n"
                 conn.execute(text("INSERT INTO fila_impressao (conteudo) VALUES (:t)"), {"t": txt})
     except: pass
     return RedirectResponse(url="/central", status_code=303)

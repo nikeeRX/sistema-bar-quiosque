@@ -460,14 +460,19 @@ async def confirmar_fechamento(request: Request):
         with engine.begin() as conn: 
             c = conn.execute(text("SELECT c.nome_completo, p.total_conta FROM pulseiras p JOIN clientes c ON p.cliente_cpf = c.cpf WHERE p.numero_pulseira = :p AND p.status = 'ABERTA'"), {"p": p}).fetchone()
             if c:
+                itens_consumidos = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall()
                 conn.execute(text("UPDATE pulseiras SET status = 'FECHADA', forma_pagamento = :pag, data_fechamento = CURRENT_TIMESTAMP, nfe_solicitada = :nfe, cpf_nota = :cpf WHERE numero_pulseira = :p AND status = 'ABERTA'"), {"p": p, "pag": pag, "nfe": bool(nfe), "cpf": cpf})
                 conn.execute(text("UPDATE vendas_itens SET status = 'FECHADA' WHERE pulseira_num = :p AND status = 'ABERTA'"), {"p": p})
-                tot = (float(c.total_conta) * 1.1) - desc
-                txt = f"--------------------------------\n      QUIOSQUE BRAHMA\nFECHAMENTO DE CONTA\nPULSEIRA: {p}\nTOTAL: R$ {tot:.2f}\nPAGTO: {pag}\n--------------------------------\n"
+                subt = float(c.total_conta)
+                taxa = subt * 0.10
+                tot = (subt + taxa) - desc
+                txt = f"--------------------------------\n      QUIOSQUE BRAHMA\nFECHAMENTO DE CONTA\nPULSEIRA: {p}\n--------------------------------\n"
+                if desc > 0: txt += f"DESCONTO TOTAL APLICADO: -R$ {desc:.2f}\n--------------------------------\n"
+                for i in itens_consumidos: txt += f"{i.qtd}x {i.item_nome} - R$ {float(i.tot):.2f}\n"
+                txt += f"--------------------------------\nSUBTOTAL: R$ {subt:.2f}\nTAXA (10%): R$ {taxa:.2f}\nTOTAL: R$ {tot:.2f}\nPAGTO: {pag}\n--------------------------------\n"
                 if nfe:
-                    itens_nota = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'FECHADA' GROUP BY item_nome"), {"p": p}).fetchall()
-                    link_danfe = emitir_nfe_api(cpf, itens_nota, tot, pag)
-                    txt += f"NFC-e SOLICITADA\nCPF: {cpf}\nDANFE: {link_danfe}\n(Simulacao de Homologacao)\n--------------------------------\n"
+                    link_danfe = emitir_nfe_api(cpf, itens_consumidos, tot, pag)
+                    txt += f"NFC-e SOLICITADA\nCPF: {cpf}\nDANFE: {link_danfe}\n(Simulacao Homologacao)\n--------------------------------\n"
                 conn.execute(text("INSERT INTO fila_impressao (conteudo) VALUES (:t)"), {"t": txt})
     except: pass
     return RedirectResponse(url="/central", status_code=303)

@@ -6,6 +6,7 @@ from datetime import datetime, date
 import json
 import urllib.parse
 import os
+import time
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key="brahma_riacho_mall_2024")
@@ -14,7 +15,6 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:GNlZnHiuKAcFnpgX
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 MENU_INICIAL = {"CHOPP": [("Caneca 350ml", 11.9), ("Descartável 500ml", 13.9), ("Tulipa 700ml", 17.9), ("Torre 2.5L", 84.9), ("Torre 3.5L", 99.9)], "CERVEJAS": [("Original 600ml", 12.9), ("Amstel 600ml", 12.0), ("Brahma Duplo Malte", 12.0), ("Heineken 600ml", 16.9), ("Spaten LN", 8.9), ("Corona LN", 10.0), ("Heineken LN", 10.0), ("Stella LN", 8.9), ("Heineken Zero", 10.0)], "PETISCOS": [("Fritas", 21.9), ("Fritas c/ Queijo", 25.9), ("Fritas Cheddar/Bacon", 27.9), ("Kibe 10un", 34.9), ("Kibe c/ Queijo", 37.9), ("Frango Passarinho", 28.9), ("Carne Sol c/ Fritas", 54.9), ("Calabresa Acebolada", 22.9), ("Tábua Frios", 34.9)], "BEBIDAS": [("Caipirinha", 14.9), ("Caipiroska Absolut", 16.9), ("Gin Tônica", 24.9), ("Gin Tropical", 26.9), ("Cozumel 600ml", 14.9), ("Refri Lata", 4.9), ("Soda Italiana", 13.9), ("Suco Lata", 5.9), ("Red Bull", 13.0), ("Água", 3.9)]}
-
 IMAGENS_CAT = {"CHOPP": "https://cdn-icons-png.flaticon.com/512/1054/1054060.png", "CERVEJAS": "https://cdn-icons-png.flaticon.com/512/3014/3014490.png", "PETISCOS": "https://cdn-icons-png.flaticon.com/512/1046/1046786.png", "BEBIDAS": "https://cdn-icons-png.flaticon.com/512/2405/2405462.png", "OUTROS": "https://cdn-icons-png.flaticon.com/512/1032/1032130.png"}
 
 with engine.begin() as conn:
@@ -41,77 +41,12 @@ try:
         conn.execute(text("INSERT INTO usuarios (username, password, role) VALUES ('admin', '1234', 'admin') ON CONFLICT (username) DO NOTHING"))
 except: pass
 
+def emitir_nfe_api(cpf, itens, total, pag):
+    time.sleep(1)
+    return f"https://homologacao.sefaz.gov.br/nfce/consulta?chave=12345678901234567890123456789012345678901234"
+
 IMG_URL = "/logo.png"
-CSS = f"""
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="apple-touch-icon" href="{IMG_URL}">
-<style>
-    * {{ box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }}
-    body {{ margin: 0; background: #0a3a7a; color: white; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }}
-    .layout-vendas {{ display: flex; flex: 1; height: 100vh; }}
-    .menu-lateral {{ width: 220px; padding: 20px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid rgba(255,255,255,0.1); background: #082d5e; overflow-y:auto; }}
-    .btn-menu {{ background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 15px; cursor: pointer; text-decoration: none; display: flex; justify-content: flex-start; align-items:center; gap: 10px; }}
-    .btn-menu:hover, .btn-menu.ativo {{ background: #d31a21; border-color: white; }}
-    .main-area {{ flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; width: 100%; }}
-    .logo-central {{ width: 280px; max-width: 100%; height: auto; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }}
-    .logo-peq {{ width: 180px; max-width: 100%; height: auto; margin-bottom: 10px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5)); }}
-    .grid-produtos {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; width: 100%; max-width: 900px; }}
-    .prod-card {{ border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s; color: white; border-width: 2px; border-style: solid; }}
-    .prod-card:hover {{ transform: scale(1.05); border-color: white; }}
-    .bg-green {{ background: linear-gradient(180deg, #28a745 0%, #1e7e34 100%); border-color: #145523; }}
-    .bg-red {{ background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border-color: #5a0407; opacity: 0.9; }}
-    .prod-card b {{ font-size: 14px; margin-bottom: 8px; text-shadow: 1px 1px 2px rgba(0,0,0,0.6); line-height: 1.2; }}
-    .prod-card span {{ font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 5px; }}
-    .comanda-lateral {{ width: 340px; background: white; color: black; border-left: 5px solid #d31a21; display: flex; flex-direction: column; }}
-    .comanda-header {{ background: #d31a21; color: white; padding: 15px; font-weight: bold; text-align: center; font-size: 18px; }}
-    .comanda-body {{ flex: 1; overflow-y: auto; padding: 15px; background: #f9f9f9; }}
-    .secao-titulo {{ font-size: 12px; color: #666; text-transform: uppercase; font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 10px; padding-bottom: 5px; }}
-    .item-linha {{ display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; border-bottom: 1px dashed #ddd; padding-bottom: 5px; align-items: center; }}
-    .comanda-footer {{ padding: 15px; background: white; border-top: 1px solid #ccc; }}
-    .btn-acao {{ display: block; width: 100%; padding: 15px; margin-bottom: 8px; border: none; border-radius: 5px; font-weight: bold; color: white; cursor: pointer; text-align: center; text-decoration: none; font-size: 14px; background: #062b5e; }}
-    .btn-acao:hover {{ background: #0d4b9c; }}
-    .container-center {{ display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; overflow-y: auto; }}
-    .card-center {{ background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 650px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); margin: auto; }}
-    .input-padrao {{ width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; box-sizing: border-box; }}
-    table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
-    th, td {{ padding: 10px 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }}
-    .table-responsive {{ width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #ddd; margin-bottom: 15px; border-radius: 5px; }}
-    .table-responsive table {{ min-width: 500px; margin-top: 0; }}
-    .switch {{ position: relative; display: inline-block; width: 50px; height: 24px; }}
-    .switch input {{ opacity: 0; width: 0; height: 0; }}
-    .slider {{ position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }}
-    .slider:before {{ position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }}
-    input:checked + .slider {{ background-color: #28a745; }}
-    input:checked + .slider:before {{ transform: translateX(26px); }}
-    .menu-duas-colunas {{ display: grid; grid-template-columns: 1fr; gap: 40px; max-width: 1000px; margin: auto; padding: 10px; }}
-    @media (min-width: 800px) {{ .menu-duas-colunas {{ grid-template-columns: 1fr 1fr; gap: 60px; }} }}
-    .faixa-laranja {{ background: #e67e22; color: white; padding: 12px 20px; font-size: 22px; font-weight: bold; text-align: center; text-transform: uppercase; position: relative; margin: 0 auto 25px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.6); max-width: 90%; font-family: 'Arial Black', sans-serif; letter-spacing: 1px; }}
-    .faixa-laranja::before, .faixa-laranja::after {{ content: ""; position: absolute; top: 0; width: 0; height: 0; border-top: 25px solid transparent; border-bottom: 25px solid transparent; }}
-    .faixa-laranja::before {{ left: -20px; border-right: 20px solid #e67e22; }}
-    .faixa-laranja::after {{ right: -20px; border-left: 20px solid #e67e22; }}
-    .linha-menu {{ display: flex; align-items: flex-end; margin-bottom: 12px; font-size: 15px; color: #ddd; }}
-    .linha-nome {{ white-space: nowrap; text-transform: uppercase; font-family: 'Arial', sans-serif; letter-spacing: 0.5px; }}
-    .linha-pontos {{ flex-grow: 1; border-bottom: 2px dotted #666; margin: 0 10px; position: relative; top: -5px; opacity: 0.7; }}
-    .linha-preco {{ white-space: nowrap; font-weight: bold; color: white; font-size: 16px; }}
-    .esgotado-txt {{ color: #d31a21; font-size: 11px; font-weight: bold; margin-left: 8px; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px; border: 1px solid #d31a21; vertical-align: middle; }}
-    .filtro-item {{ flex: 1 1 150px; }}
-    @media (max-width: 768px) {{
-        body {{ height: auto; overflow: auto; }}
-        .layout-vendas {{ display: flex; flex-direction: column; height: auto; min-height: 100vh; }}
-        .menu-lateral {{ width: 100%; flex-direction: row; overflow-x: auto; padding: 10px; border-right: none; border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; gap: 8px; flex-shrink: 0; white-space: nowrap; -webkit-overflow-scrolling: touch; }}
-        .btn-menu {{ padding: 10px 15px; font-size: 14px; text-align: center; flex: 0 0 auto; justify-content: center; flex-direction: column; }}
-        .main-area {{ display: flex; overflow: visible; padding: 10px; flex-shrink: 0; width: 100%; box-sizing: border-box; }}
-        .grid-produtos {{ grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; width: 100%; }}
-        .prod-card {{ min-height: 110px; padding: 10px; }}
-        .comanda-lateral {{ width: 100%; display: flex; border-left: none; border-top: 5px solid #d31a21; flex-shrink: 0; }}
-        .card-center {{ width: 95%; padding: 20px; }}
-        .filtro-item {{ flex: 1 1 45%; }}
-        #form_prod input, #form_prod select {{ flex: 1 1 100% !important; }}
-    }}
-</style>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-"""
+CSS = f"""<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="{IMG_URL}"><style>* {{ box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }} body {{ margin: 0; background: #0a3a7a; color: white; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }} .layout-vendas {{ display: flex; flex: 1; height: 100vh; }} .menu-lateral {{ width: 220px; padding: 20px; display: flex; flex-direction: column; gap: 10px; border-right: 1px solid rgba(255,255,255,0.1); background: #082d5e; overflow-y:auto; }} .btn-menu {{ background: #0a3a7a; color: white; border: 1px solid #1352a3; padding: 15px; border-radius: 8px; text-align: left; font-weight: bold; font-size: 15px; cursor: pointer; text-decoration: none; display: flex; justify-content: flex-start; align-items:center; gap: 10px; }} .btn-menu:hover, .btn-menu.ativo {{ background: #d31a21; border-color: white; }} .main-area {{ flex: 1; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; align-items: center; width: 100%; }} .logo-central {{ width: 280px; max-width: 100%; height: auto; margin-bottom: 20px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.5)); }} .logo-peq {{ width: 180px; max-width: 100%; height: auto; margin-bottom: 10px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5)); }} .grid-produtos {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; width: 100%; max-width: 900px; }} .prod-card {{ border-radius: 10px; padding: 15px 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; justify-content: space-between; min-height: 120px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s; color: white; border-width: 2px; border-style: solid; }} .prod-card:hover {{ transform: scale(1.05); border-color: white; }} .bg-green {{ background: linear-gradient(180deg, #28a745 0%, #1e7e34 100%); border-color: #145523; }} .bg-red {{ background: linear-gradient(180deg, #d31a21 0%, #9e0b10 100%); border-color: #5a0407; opacity: 0.9; }} .prod-card b {{ font-size: 14px; margin-bottom: 8px; text-shadow: 1px 1px 2px rgba(0,0,0,0.6); line-height: 1.2; }} .prod-card span {{ font-size: 16px; font-weight: bold; background: rgba(0,0,0,0.3); padding: 5px; border-radius: 5px; }} .comanda-lateral {{ width: 340px; background: white; color: black; border-left: 5px solid #d31a21; display: flex; flex-direction: column; }} .comanda-header {{ background: #d31a21; color: white; padding: 15px; font-weight: bold; text-align: center; font-size: 18px; }} .comanda-body {{ flex: 1; overflow-y: auto; padding: 15px; background: #f9f9f9; }} .secao-titulo {{ font-size: 12px; color: #666; text-transform: uppercase; font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 10px; padding-bottom: 5px; }} .item-linha {{ display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px; border-bottom: 1px dashed #ddd; padding-bottom: 5px; align-items: center; }} .comanda-footer {{ padding: 15px; background: white; border-top: 1px solid #ccc; }} .btn-acao {{ display: block; width: 100%; padding: 15px; margin-bottom: 8px; border: none; border-radius: 5px; font-weight: bold; color: white; cursor: pointer; text-align: center; text-decoration: none; font-size: 14px; background: #062b5e; }} .btn-acao:hover {{ background: #0d4b9c; }} .container-center {{ display: flex; align-items: center; justify-content: center; height: 100vh; padding: 20px; overflow-y: auto; }} .card-center {{ background: white; color: #333; padding: 30px; border-radius: 15px; width: 100%; max-width: 650px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4); margin: auto; }} .input-padrao {{ width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; box-sizing: border-box; }} table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }} th, td {{ padding: 10px 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }} .table-responsive {{ width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #ddd; margin-bottom: 15px; border-radius: 5px; }} .table-responsive table {{ min-width: 500px; margin-top: 0; }} .switch {{ position: relative; display: inline-block; width: 50px; height: 24px; }} .switch input {{ opacity: 0; width: 0; height: 0; }} .slider {{ position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }} .slider:before {{ position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }} input:checked + .slider {{ background-color: #28a745; }} input:checked + .slider:before {{ transform: translateX(26px); }} .menu-duas-colunas {{ display: grid; grid-template-columns: 1fr; gap: 40px; max-width: 1000px; margin: auto; padding: 10px; }} @media (min-width: 800px) {{ .menu-duas-colunas {{ grid-template-columns: 1fr 1fr; gap: 60px; }} }} .faixa-laranja {{ background: #e67e22; color: white; padding: 12px 20px; font-size: 22px; font-weight: bold; text-align: center; text-transform: uppercase; position: relative; margin: 0 auto 25px auto; box-shadow: 0 4px 6px rgba(0,0,0,0.6); max-width: 90%; font-family: 'Arial Black', sans-serif; letter-spacing: 1px; }} .faixa-laranja::before, .faixa-laranja::after {{ content: ""; position: absolute; top: 0; width: 0; height: 0; border-top: 25px solid transparent; border-bottom: 25px solid transparent; }} .faixa-laranja::before {{ left: -20px; border-right: 20px solid #e67e22; }} .faixa-laranja::after {{ right: -20px; border-left: 20px solid #e67e22; }} .linha-menu {{ display: flex; align-items: flex-end; margin-bottom: 12px; font-size: 15px; color: #ddd; }} .linha-nome {{ white-space: nowrap; text-transform: uppercase; font-family: 'Arial', sans-serif; letter-spacing: 0.5px; }} .linha-pontos {{ flex-grow: 1; border-bottom: 2px dotted #666; margin: 0 10px; position: relative; top: -5px; opacity: 0.7; }} .linha-preco {{ white-space: nowrap; font-weight: bold; color: white; font-size: 16px; }} .esgotado-txt {{ color: #d31a21; font-size: 11px; font-weight: bold; margin-left: 8px; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px; border: 1px solid #d31a21; vertical-align: middle; }} .filtro-item {{ flex: 1 1 150px; }} @media (max-width: 768px) {{ body {{ height: auto; overflow: auto; }} .layout-vendas {{ display: flex; flex-direction: column; height: auto; min-height: 100vh; }} .menu-lateral {{ width: 100%; flex-direction: row; overflow-x: auto; padding: 10px; border-right: none; border-bottom: 2px solid rgba(255,255,255,0.1); display: flex; gap: 8px; flex-shrink: 0; white-space: nowrap; -webkit-overflow-scrolling: touch; }} .btn-menu {{ padding: 10px 15px; font-size: 14px; text-align: center; flex: 0 0 auto; justify-content: center; flex-direction: column; }} .main-area {{ display: flex; overflow: visible; padding: 10px; flex-shrink: 0; width: 100%; box-sizing: border-box; }} .grid-produtos {{ grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; width: 100%; }} .prod-card {{ min-height: 110px; padding: 10px; }} .comanda-lateral {{ width: 100%; display: flex; border-left: none; border-top: 5px solid #d31a21; flex-shrink: 0; }} .card-center {{ width: 95%; padding: 20px; }} .filtro-item {{ flex: 1 1 45%; }} #form_prod input, #form_prod select {{ flex: 1 1 100% !important; }} }}</style><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>"""
 
 IMG_LOGO = f"<div style='display:flex; justify-content:center; margin-bottom:20px;'><img src='{IMG_URL}' class='logo-central'></div>"
 IMG_LOGO_PEQ = f"<div style='display:flex; justify-content:center; margin-bottom:15px;'><img src='{IMG_URL}' class='logo-peq'></div>"
@@ -126,7 +61,7 @@ async def exibir_logo():
 
 @app.get("/", response_class=HTMLResponse)
 async def login_page(): 
-    return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO}<h2>Acesso ao Sistema</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form><br><a href='/cardapio' style='color:#062b5e; font-weight:bold; text-decoration:underline;'>Ver Cardápio Digital</a></div></div></body></html>"""
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO}<h2>Acesso ao Sistema</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form><br><a href='/cardapio' style='color:#062b5e; font-weight:bold; text-decoration:underline;'>Ver Cardápio Digital</a></div></div></body></html>"
 
 @app.post("/login")
 async def login(request: Request):
@@ -155,7 +90,7 @@ async def central(request: Request):
     if role in ["admin", "gerente", "caixa"]: b += f"<a href='/caixa' class='btn-acao' style='background:#e67e22'>💰 GESTÃO DE CAIXA</a>"
     if role in ["admin", "gerente"]: b += "<a href='/comissoes' class='btn-acao' style='background:#8e44ad'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#062b5e'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a><a href='/baixar_conector' class='btn-acao' style='background:#f39c12; color:black;'>📥 BAIXAR CONECTOR DE IMPRESSORA</a>"
     if role == "admin": b += "<a href='/usuarios' class='btn-acao' style='background:#9b59b6'>👥 GERENCIAR USUÁRIOS</a>"
-    return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<p>Logado como: <b>{user.upper()}</b></p>{b}<br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"""
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<p>Logado como: <b>{user.upper()}</b></p>{b}<br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"
 
 @app.get("/abrir_caixa", response_class=HTMLResponse)
 async def abrir_caixa(request: Request):
@@ -263,8 +198,7 @@ async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str 
     if fim:
         where_pulseira += " AND CAST(data_fechamento AS DATE) <= CAST(:fim AS DATE)"; where_vendas += " AND CAST(data_venda AS DATE) <= CAST(:fim AS DATE)"; where_hist += " AND CAST(data_entrada AS DATE) <= CAST(:fim AS DATE)"; params_p["fim"] = params_v["fim"] = params_h["fim"] = fim
     if garcom_filtro:
-        where_vendas += " AND vendas_itens.garcom = :g_filtro"
-        params_v["g_filtro"] = garcom_filtro
+        where_vendas += " AND vendas_itens.garcom = :g_filtro"; params_v["g_filtro"] = garcom_filtro
     join_vendas = ""
     if cat or prod:
         join_vendas = "JOIN produtos p ON vendas_itens.item_nome = p.nome"
@@ -492,43 +426,8 @@ async def fechar_conta(request: Request, q: str = ""):
                 subt = float(query.total_conta or 0)
                 taxa = subt * 0.10
                 tot_final = subt + taxa
-                form_parcial = f"""
-                <div style='background:#ffeaa7; padding:15px; border-radius:8px; margin-top:15px; border:1px solid #fdcb6e;'>
-                    <h4 style='margin-top:0; color:#d35400; border-bottom:1px solid #fdcb6e; padding-bottom:5px;'>💸 Pagamento Parcial (Rachar a Conta)</h4>
-                    <form action='/parcial' method='post' style='display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0;'>
-                        <input type='hidden' name='p' value='{query.numero_pulseira}'>
-                        <input type='hidden' name='cpf' value='{query.cpf}'>
-                        <input type='number' step='0.01' name='val' max='{tot_final}' class='input-padrao' placeholder='R$ Valor' required style='flex:1; min-width:80px; margin:0;'>
-                        <select name='pg' class='input-padrao' style='flex:1; min-width:110px; margin:0;'>
-                            <option value='DINHEIRO'>DINHEIRO</option><option value='PIX'>PIX</option><option value='C. CREDITO'>C. CREDITO</option><option value='C. DEBITO'>C. DEBITO</option>
-                        </select>
-                        <button class='btn-acao' style='background:#d35400; margin:0; flex:1; min-width:100px;'>RECEBER</button>
-                    </form>
-                </div>
-                """
-                res = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; color:#333; margin-top:20px; text-align:left;'>
-                    <h3 style='text-align:center; margin-top:0;'>{query.nome_completo}</h3><p style='text-align:center;'>Pulseira: <b>{query.numero_pulseira}</b></p>
-                    <div style='background:white; padding:15px; border-radius:8px; max-height:220px; overflow-y:auto; border:1px solid #ddd;'>{lista}</div>
-                    <div style='padding-top:15px; font-size:16px;'>
-                        <div class='item-linha'><span>Saldo Devedor S/ Tx:</span><span>R$ {subt:.2f}</span></div>
-                        <div class='item-linha'><span>Serviço (10%):</span><span>R$ {taxa:.2f}</span></div>
-                        <div class='item-linha' style='color:#062b5e;'><span>Desconto (R$):</span><input type='number' id='input_desconto' value='0' min='0' step='0.01' style='width:70px; padding:5px;' oninput='calcDiv()'></div>
-                        <div class='item-linha' style='font-weight:bold; font-size:20px; color:#d31a21;'><span>RESTANTE A PAGAR:</span><span id='tot_final'>R$ {tot_final:.2f}</span></div>
-                        <div class='item-linha'><span>Dividir por:</span><input type='number' id='divisores' value='1' min='1' style='width:60px; text-align:center; padding:5px;' oninput='calcDiv()'></div>
-                        <div class='item-linha' style='font-weight:bold; font-size:18px;'><span>Por Pessoa:</span><span id='val_pessoa'>R$ {tot_final:.2f}</span></div>
-                        <div class='item-linha'><span>Pagamento:</span><select id='select_pag' class='input-padrao' style='width:auto;' onchange='document.getElementById("input_pag_form").value = this.value'><option value='DINHEIRO'>DINHEIRO</option><option value='PIX'>PIX</option><option value='C. CREDITO'>C. CREDITO</option><option value='C. DEBITO'>C. DEBITO</option></select></div>
-                    </div>
-                    {form_parcial}
-                    <form action='/confirmar_fechamento' method='post'>
-                        <input type='hidden' name='p' value='{query.numero_pulseira}'><input type='hidden' name='divisao' id='input_div' value='1'><input type='hidden' name='desconto' id='input_desc_form' value='0'><input type='hidden' name='pagamento' id='input_pag_form' value='DINHEIRO'>
-                        <div style='background:#e9ecef; padding:15px; border-radius:8px; margin-top:15px; border:1px solid #ccc;'>
-                            <div style='display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;'><span style='font-weight:bold; color:#28a745;'>🧾 Emitir Nota Fiscal (NFC-e)?</span><label class='switch'><input type='checkbox' name='nfe' onchange='document.getElementById("box-cpf").style.display = this.checked ? "block" : "none"'><span class='slider'></span></label></div>
-                            <div id='box-cpf' style='display:none;'><span style='font-size:12px; color:#666;'>CPF:</span><input class='input-padrao' name='cpf_nota' value='{query.cpf}'></div>
-                        </div>
-                        <button class='btn-acao' style='background:#28a745; font-size:18px; margin-top:15px;'>🖨️ ZERAR CONTA E IMPRIMIR</button>
-                    </form>
-                    <script>function calcDiv() {{ let subt = {subt}; let taxa = {taxa}; let desc = parseFloat(document.getElementById('input_desconto').value.replace(',', '.')) || 0; let div = parseInt(document.getElementById('divisores').value) || 1; let totFinal = Math.max(subt + taxa - desc, 0); document.getElementById('tot_final').innerText = 'R$ ' + totFinal.toFixed(2); document.getElementById('val_pessoa').innerText = 'R$ ' + (totFinal / div).toFixed(2); document.getElementById('input_div').value = div; document.getElementById('input_desc_form').value = desc; }}</script>
-                </div>"""
+                form_parcial = f"""<div style='background:#ffeaa7; padding:15px; border-radius:8px; margin-top:15px; border:1px solid #fdcb6e;'><h4 style='margin-top:0; color:#d35400; border-bottom:1px solid #fdcb6e; padding-bottom:5px;'>💸 Pagamento Parcial (Rachar a Conta)</h4><form action='/parcial' method='post' style='display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0;'><input type='hidden' name='p' value='{query.numero_pulseira}'><input type='hidden' name='cpf' value='{query.cpf}'><input type='number' step='0.01' name='val' max='{tot_final}' class='input-padrao' placeholder='R$ Valor' required style='flex:1; min-width:80px; margin:0;'><select name='pg' class='input-padrao' style='flex:1; min-width:110px; margin:0;'><option value='DINHEIRO'>DINHEIRO</option><option value='PIX'>PIX</option><option value='C. CREDITO'>C. CREDITO</option><option value='C. DEBITO'>C. DEBITO</option></select><button class='btn-acao' style='background:#d35400; margin:0; flex:1; min-width:100px;'>RECEBER</button></form></div>"""
+                res = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; color:#333; margin-top:20px; text-align:left;'><h3 style='text-align:center; margin-top:0;'>{query.nome_completo}</h3><p style='text-align:center;'>Pulseira: <b>{query.numero_pulseira}</b></p><div style='background:white; padding:15px; border-radius:8px; max-height:220px; overflow-y:auto; border:1px solid #ddd;'>{lista}</div><div style='padding-top:15px; font-size:16px;'><div class='item-linha'><span>Saldo Devedor S/ Tx:</span><span>R$ {subt:.2f}</span></div><div class='item-linha'><span>Serviço (10%):</span><span>R$ {taxa:.2f}</span></div><div class='item-linha' style='color:#062b5e;'><span>Desconto (R$):</span><input type='number' id='input_desconto' value='0' min='0' step='0.01' style='width:70px; padding:5px;' oninput='calcDiv()'></div><div class='item-linha' style='font-weight:bold; font-size:20px; color:#d31a21;'><span>RESTANTE A PAGAR:</span><span id='tot_final'>R$ {tot_final:.2f}</span></div><div class='item-linha'><span>Dividir por:</span><input type='number' id='divisores' value='1' min='1' style='width:60px; text-align:center; padding:5px;' oninput='calcDiv()'></div><div class='item-linha' style='font-weight:bold; font-size:18px;'><span>Por Pessoa:</span><span id='val_pessoa'>R$ {tot_final:.2f}</span></div><div class='item-linha'><span>Pagamento:</span><select id='select_pag' class='input-padrao' style='width:auto;' onchange='document.getElementById("input_pag_form").value = this.value'><option value='DINHEIRO'>DINHEIRO</option><option value='PIX'>PIX</option><option value='C. CREDITO'>C. CREDITO</option><option value='C. DEBITO'>C. DEBITO</option></select></div></div>{form_parcial}<form action='/confirmar_fechamento' method='post'><input type='hidden' name='p' value='{query.numero_pulseira}'><input type='hidden' name='divisao' id='input_div' value='1'><input type='hidden' name='desconto' id='input_desc_form' value='0'><input type='hidden' name='pagamento' id='input_pag_form' value='DINHEIRO'><div style='background:#e9ecef; padding:15px; border-radius:8px; margin-top:15px; border:1px solid #ccc;'><div style='display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;'><span style='font-weight:bold; color:#28a745;'>🧾 Emitir Nota Fiscal (NFC-e)?</span><label class='switch'><input type='checkbox' name='nfe' onchange='document.getElementById("box-cpf").style.display = this.checked ? "block" : "none"'><span class='slider'></span></label></div><div id='box-cpf' style='display:none;'><span style='font-size:12px; color:#666;'>CPF:</span><input class='input-padrao' name='cpf_nota' value='{query.cpf}'></div></div><button class='btn-acao' style='background:#28a745; font-size:18px; margin-top:15px;'>🖨️ ZERAR CONTA E IMPRIMIR</button></form><script>function calcDiv() {{ let subt = {subt}; let taxa = {taxa}; let desc = parseFloat(document.getElementById('input_desconto').value.replace(',', '.')) || 0; let div = parseInt(document.getElementById('divisores').value) || 1; let totFinal = Math.max(subt + taxa - desc, 0); document.getElementById('tot_final').innerText = 'R$ ' + totFinal.toFixed(2); document.getElementById('val_pessoa').innerText = 'R$ ' + (totFinal / div).toFixed(2); document.getElementById('input_div').value = div; document.getElementById('input_desc_form').value = desc; }}</script></div>"""
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Fechar Conta</h2><form method='get'><input class='input-padrao' name='q' placeholder='CPF ou Nº Pulseira' value='{q}' required><button class='btn-acao'>CONSULTAR CONTA</button></form>{res}<br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
 
 @app.post("/parcial")
@@ -560,7 +459,10 @@ async def confirmar_fechamento(request: Request):
                 conn.execute(text("UPDATE vendas_itens SET status = 'FECHADA' WHERE pulseira_num = :p AND status = 'ABERTA'"), {"p": p})
                 tot = (float(c.total_conta) * 1.1) - desc
                 txt = f"--------------------------------\n      QUIOSQUE BRAHMA\nFECHAMENTO DE CONTA\nPULSEIRA: {p}\nTOTAL: R$ {tot:.2f}\nPAGTO: {pag}\n--------------------------------\n"
-                if nfe: txt += f"NFC-e SOLICITADA\nCPF: {cpf}\n--------------------------------\n"
+                if nfe:
+                    itens_nota = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'FECHADA' GROUP BY item_nome"), {"p": p}).fetchall()
+                    link_danfe = emitir_nfe_api(cpf, itens_nota, tot, pag)
+                    txt += f"NFC-e SOLICITADA\nCPF: {cpf}\nDANFE: {link_danfe}\n(Simulação de Homologação)\n--------------------------------\n"
                 conn.execute(text("INSERT INTO fila_impressao (conteudo) VALUES (:t)"), {"t": txt})
     except: pass
     return RedirectResponse(url="/central", status_code=303)

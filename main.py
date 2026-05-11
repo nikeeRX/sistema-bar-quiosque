@@ -61,7 +61,7 @@ async def exibir_logo():
 
 @app.get("/", response_class=HTMLResponse)
 async def login_page(): 
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO}<h2>Acesso ao Sistema</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form><br><a href='/cardapio' style='color:#062b5e; font-weight:bold; text-decoration:underline;'>Ver Cardápio Digital</a></div></div></body></html>"
+    return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO}<h2>Acesso ao Sistema</h2><form action='/login' method='post'><input class='input-padrao' name='user' placeholder='Usuário' required><input class='input-padrao' name='pw' type='password' placeholder='Senha' required><button class='btn-acao' style='padding:15px; font-size:18px;'>ENTRAR</button></form><br><a href='/cardapio' style='color:#062b5e; font-weight:bold; text-decoration:underline;'>Ver Cardápio Digital</a></div></div></body></html>"""
 
 @app.post("/login")
 async def login(request: Request):
@@ -88,9 +88,14 @@ async def central(request: Request):
         if role in ["admin", "gerente", "caixa"]: b += f"<a href='/abrir_caixa' class='btn-acao' style='background:#28a745; padding:20px; font-size:18px;'>🟢 INICIAR CAIXA / EVENTO</a>"
         else: b += f"<p style='color:#f39c12; font-weight:bold; text-align:center;'>⚠️ O Caixa está fechado. Aguarde a gerência.</p>"
     if role in ["admin", "gerente", "caixa"]: b += f"<a href='/caixa' class='btn-acao' style='background:#e67e22'>💰 GESTÃO DE CAIXA</a>"
-    if role in ["admin", "gerente"]: b += "<a href='/comissoes' class='btn-acao' style='background:#8e44ad'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#062b5e'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a><a href='/baixar_conector' class='btn-acao' style='background:#f39c12; color:black;'>📥 BAIXAR CONECTOR DE IMPRESSORA</a>"
+    if role in ["admin", "gerente"]: b += "<a href='/comissoes' class='btn-acao' style='background:#8e44ad'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#062b5e'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a><a href='/impressora_virtual' class='btn-acao' style='background:#555; color:white;'>🖨️ IMPRESSORA VIRTUAL (TESTE TELA)</a><a href='/baixar_conector' class='btn-acao' style='background:#f39c12; color:black;'>📥 BAIXAR CONECTOR (PC)</a>"
     if role == "admin": b += "<a href='/usuarios' class='btn-acao' style='background:#9b59b6'>👥 GERENCIAR USUÁRIOS</a>"
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<p>Logado como: <b>{user.upper()}</b></p>{b}<br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"
+    return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<p>Logado como: <b>{user.upper()}</b></p>{b}<br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"""
+
+@app.get("/impressora_virtual", response_class=HTMLResponse)
+async def impressora_virtual(request: Request):
+    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    return f"<html><head>{CSS}</head><body style='background-color:#1a1a1a;'><div class='container-center'><div class='card-center' style='max-width:600px; width:100%;'><h2>🖨️ Impressora Virtual</h2><p style='color:#666;'>Mantenha essa tela aberta no PC para simular a impressora.</p><div id='papel' style='background:#ffffe0; color:black; font-family:monospace; font-size:14px; text-align:left; padding:20px; height:400px; overflow-y:auto; border-radius:5px; border-left: 5px solid #ccc; box-shadow: inset 0 0 10px rgba(0,0,0,0.1); white-space: pre-wrap;'>Aguardando tickets...</div><br><button class='btn-acao' style='background:#d31a21;' onclick='document.getElementById(\"papel\").innerHTML=\"Aguardando tickets...\"'>LIMPAR PAPEL</button><br><a href='/central' style='color:gray'>Voltar</a></div></div><script>setInterval(() => {{ fetch('/api/pendentes').then(r => r.json()).then(data => {{ if(data.jobs && data.jobs.length > 0) {{ let job = data.jobs[0]; let papel = document.getElementById('papel'); if(papel.innerHTML === 'Aguardando tickets...') papel.innerHTML = ''; papel.innerHTML += '\\n\\n' + job.conteudo; papel.scrollTop = papel.scrollHeight; fetch('/api/impresso/' + job.id, {{method: 'POST'}}); }} }}); }}, 3000);</script></body></html>"
 
 @app.get("/abrir_caixa", response_class=HTMLResponse)
 async def abrir_caixa(request: Request):
@@ -462,7 +467,7 @@ async def confirmar_fechamento(request: Request):
                 if nfe:
                     itens_nota = conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'FECHADA' GROUP BY item_nome"), {"p": p}).fetchall()
                     link_danfe = emitir_nfe_api(cpf, itens_nota, tot, pag)
-                    txt += f"NFC-e SOLICITADA\nCPF: {cpf}\nDANFE: {link_danfe}\n(Simulação de Homologação)\n--------------------------------\n"
+                    txt += f"NFC-e SOLICITADA\nCPF: {cpf}\nDANFE: {link_danfe}\n(Simulacao de Homologacao)\n--------------------------------\n"
                 conn.execute(text("INSERT INTO fila_impressao (conteudo) VALUES (:t)"), {"t": txt})
     except: pass
     return RedirectResponse(url="/central", status_code=303)

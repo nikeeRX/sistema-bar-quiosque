@@ -622,6 +622,36 @@ async def excluir_usuario(request: Request):
     except: pass
     return RedirectResponse(url="/usuarios", status_code=303)
 
+@app.get("/cardapio", response_class=HTMLResponse)
+async def ver_cardapio():
+    html_categorias = ""
+    with engine.connect() as conn:
+        prods = conn.execute(text("SELECT nome, preco, categoria, estoque FROM produtos ORDER BY categoria, nome")).fetchall()
+        menu_dict = {}
+        for p in prods:
+            cat = p.categoria or "OUTROS"
+            if cat not in menu_dict: menu_dict[cat] = []
+            menu_dict[cat].append(p)
+        for cat, itens in menu_dict.items():
+            img_cat = IMAGENS_CAT.get(cat, IMAGENS_CAT["OUTROS"])
+            lista_itens = ""
+            for i in itens:
+                est = int(i.estoque or 0)
+                if est > 0:
+                    lista_itens += f"<div class='linha-menu'><span class='linha-nome'>{i.nome}</span><div class='linha-pontos'></div><span class='linha-preco'>R$ {float(i.preco):.2f}</span></div>"
+                else:
+                    lista_itens += f"<div class='linha-menu'><span class='linha-nome' style='color:#999; text-decoration:line-through;'>{i.nome}</span><span class='esgotado-txt'>ESGOTADO</span><div class='linha-pontos'></div><span class='linha-preco' style='color:#999;'>R$ {float(i.preco):.2f}</span></div>"
+            html_categorias += f"<div style='margin-bottom: 40px;'><div class='faixa-laranja'><img src='{img_cat}' style='width:24px; height:24px; vertical-align:middle; margin-right:10px; filter: brightness(0) invert(1);'>{cat}</div>{lista_itens}</div>"
+    return f"<html><head>{CSS}</head><body style='background:#0a3a7a; height:auto; overflow:auto;'><div style='padding:20px; max-width:800px; margin:auto; text-align:center;'>{IMG_LOGO_PEQ}<h1 style='color:white; margin-bottom:30px;'>CARDÁPIO DIGITAL</h1><div class='menu-duas-colunas'>{html_categorias}</div><br><br><a href='/' style='color:white; text-decoration:underline;'>Voltar ao Início</a><br><br></div></body></html>"
+
+@app.get("/qr", response_class=HTMLResponse)
+async def gerar_qr(request: Request):
+    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    base_url = str(request.base_url).rstrip('/')
+    url_cardapio = f"{base_url}/cardapio"
+    qr_api = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(url_cardapio)}"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>📱 QR Code do Cardápio</h2><p>Imprima ou mostre aos clientes para acessarem o cardápio no celular.</p><img src='{qr_api}' style='margin:20px; border:10px solid white; border-radius:10px; width:250px;'><p style='font-size:14px;'><a href='{url_cardapio}' target='_blank'>{url_cardapio}</a></p><br><a href='/central' class='btn-acao' style='background:#062b5e;'>Voltar</a></div></div></body></html>"
+
 @app.get("/logout")
 async def logout(request: Request): 
     request.session.clear()

@@ -89,19 +89,19 @@ async def central(request: Request):
         c_status = conn.execute(text("SELECT tipo FROM caixa_movimentos WHERE tipo IN ('ABERTURA', 'FECHAMENTO') ORDER BY id DESC LIMIT 1")).fetchone()
         caixa_aberto = True if c_status and c_status[0] == 'ABERTURA' else False
     if caixa_aberto:
-        if role in ["admin", "gerente", "garcom", "caixa", "portaria"]: b += f"<a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR PULSEIRA</a>"
-        if role in ["admin", "gerente", "garcom", "caixa"]: b += f"<a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / LANÇAR ITENS</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a>"
+        if role in ["admin", "administrador", "gerente", "garcom", "caixa", "portaria"]: b += f"<a href='/cadastro' class='btn-acao' style='background:#d31a21'>➕ NOVO CADASTRO</a><a href='/buscar' class='btn-acao'>🔍 BUSCAR / ABRIR PULSEIRA</a>"
+        if role in ["admin", "administrador", "gerente", "garcom", "caixa"]: b += f"<a href='/vendas' class='btn-acao' style='background:#28a745'>🛒 CAIXA / LANÇAR ITENS</a><a href='/fechar_conta' class='btn-acao' style='background:#333'>🔒 FECHAR CONTA</a>"
     else:
-        if role in ["admin", "gerente", "caixa"]: b += f"<a href='/abrir_caixa' class='btn-acao' style='background:#28a745; padding:20px; font-size:18px;'>🟢 INICIAR CAIXA / EVENTO</a>"
+        if role in ["admin", "administrador", "gerente", "caixa"]: b += f"<a href='/abrir_caixa' class='btn-acao' style='background:#28a745; padding:20px; font-size:18px;'>🟢 INICIAR CAIXA / EVENTO</a>"
         else: b += f"<p style='color:#f39c12; font-weight:bold; text-align:center;'>⚠️ O Caixa está fechado. Aguarde a gerência.</p>"
-    if role in ["admin", "gerente", "caixa"]: b += f"<a href='/caixa' class='btn-acao' style='background:#e67e22'>💰 GESTÃO DE CAIXA</a>"
-    if role in ["admin", "gerente"]: b += "<a href='/historico' class='btn-acao' style='background:#f39c12; color:black;'>🕒 HISTÓRICO E ESTORNOS</a><a href='/comissoes' class='btn-acao' style='background:#8e44ad'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#062b5e'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a><a href='/impressora_virtual' class='btn-acao' style='background:#555; color:white;'>🖨️ IMPRESSORA VIRTUAL (TESTE)</a><a href='/baixar_conector' class='btn-acao' style='background:#f39c12; color:black;'>📥 BAIXAR CONECTOR (PC)</a>"
-    if role == "admin": b += "<a href='/usuarios' class='btn-acao' style='background:#9b59b6'>👥 GERENCIAR USUÁRIOS</a><a href='/config_nfe' class='btn-acao' style='background:#34495e'>⚙️ CONFIGURAÇÕES NFE</a>"
+    if role in ["admin", "administrador", "gerente", "caixa"]: b += f"<a href='/caixa' class='btn-acao' style='background:#e67e22'>💰 GESTÃO DE CAIXA</a>"
+    if role in ["admin", "administrador", "gerente"]: b += "<a href='/historico' class='btn-acao' style='background:#f39c12; color:black;'>🕒 HISTÓRICO E ESTORNOS</a><a href='/comissoes' class='btn-acao' style='background:#8e44ad'>💸 COMISSÕES DE VENDAS</a><a href='/dashboard' class='btn-acao' style='background:#17a2b8'>📊 DASHBOARD GERENCIAL</a><a href='/estoque' class='btn-acao' style='background:#062b5e'>📦 GESTÃO DE ESTOQUE</a><a href='/qr' class='btn-acao' style='background:#f1c40f; color:black;'>📱 QR CODE DO CARDÁPIO</a><a href='/impressora_virtual' class='btn-acao' style='background:#555; color:white;'>🖨️ IMPRESSORA VIRTUAL (TESTE)</a><a href='/baixar_conector' class='btn-acao' style='background:#f39c12; color:black;'>📥 BAIXAR CONECTOR (PC)</a>"
+    if role in ["admin", "administrador"]: b += "<a href='/usuarios' class='btn-acao' style='background:#9b59b6'>👥 GERENCIAR USUÁRIOS</a><a href='/config_nfe' class='btn-acao' style='background:#34495e'>⚙️ CONFIGURAÇÕES NFE</a>"
     return f"""<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<p>Logado como: <b>{user.upper()}</b></p>{b}<br><a href='/logout' style='color:gray'>Sair</a></div></div></body></html>"""
 
 @app.get("/config_nfe", response_class=HTMLResponse)
 async def config_nfe(request: Request):
-    if request.session.get("role") != "admin": return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador"]: return RedirectResponse(url="/central")
     with engine.connect() as conn: conf = conn.execute(text("SELECT * FROM config_nfe WHERE id = 1")).fetchone()
     amb_sel_1, amb_sel_2 = ("selected", "") if conf and conf.ambiente == '1' else ("", "selected")
     form = f"""<div style='background:#f4f4f4; padding:20px; border-radius:10px; text-align:left; border:1px solid #ccc; max-width: 600px; margin: auto;'><h3 style='margin-top:0; color:#34495e;'>⚙️ Credenciais Fiscais</h3><form action='/salvar_config_nfe' method='post' enctype='multipart/form-data'><label style='font-size:12px; font-weight:bold; color:#666;'>Ambiente da SEFAZ:</label><select name='ambiente' class='input-padrao' required><option value='2' {amb_sel_2}>HOMOLOGAÇÃO (Teste)</option><option value='1' {amb_sel_1}>PRODUÇÃO (Valendo Oficial)</option></select><label style='font-size:12px; font-weight:bold; color:#666;'>Token da API (Focus NFe):</label><input name='focus_token' class='input-padrao' placeholder='Ex: 4k2j4k2j4k2j4k2...' value='{conf.focus_token if conf else ''}'><label style='font-size:12px; font-weight:bold; color:#666;'>ID CSC (Código de Segurança):</label><input name='csc_id' class='input-padrao' placeholder='Ex: 000001' value='{conf.csc_id if conf else ''}'><label style='font-size:12px; font-weight:bold; color:#666;'>Token CSC (Alfanumérico):</label><input name='csc_token' class='input-padrao' placeholder='Ex: AB12CD34...' value='{conf.csc_token if conf else ''}'><hr style='border: 1px dashed #ccc; margin: 15px 0;'><label style='font-size:12px; font-weight:bold; color:#666;'>Upload Certificado Digital A1 (.pfx):</label><input type='file' name='certificado' class='input-padrao' accept='.pfx,.p12' style='padding: 8px;'><label style='font-size:12px; font-weight:bold; color:#666;'>Senha do Certificado:</label><input name='cert_senha' type='password' class='input-padrao' placeholder='Senha do arquivo A1' value='{conf.cert_senha if conf else ''}'><button class='btn-acao' style='background:#28a745; margin-top:15px; font-size:16px;'>💾 SALVAR CONFIGURAÇÕES</button></form></div>"""
@@ -109,7 +109,7 @@ async def config_nfe(request: Request):
 
 @app.post("/salvar_config_nfe")
 async def salvar_config_nfe(request: Request, ambiente: str = Form(...), focus_token: str = Form(""), csc_id: str = Form(""), csc_token: str = Form(""), cert_senha: str = Form(""), certificado: UploadFile = File(None)):
-    if request.session.get("role") != "admin": return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador"]: return RedirectResponse(url="/central")
     cert_path = ""
     if certificado and certificado.filename:
         cert_path = f"/tmp/{certificado.filename}"
@@ -123,7 +123,7 @@ async def salvar_config_nfe(request: Request, ambiente: str = Form(...), focus_t
 
 @app.get("/vendas", response_class=HTMLResponse)
 async def vendas(request: Request, cat: str = "CHOPP", p: str = "", modo: str = ""):
-    if request.session.get("role") not in ["admin", "gerente", "garcom", "caixa"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente", "garcom", "caixa"]: return RedirectResponse(url="/central")
     with engine.connect() as conn:
         c_status = conn.execute(text("SELECT tipo FROM caixa_movimentos WHERE tipo IN ('ABERTURA', 'FECHAMENTO') ORDER BY id DESC LIMIT 1")).fetchone()
         if not c_status or c_status[0] != 'ABERTURA': return HTMLResponse("<script>alert('O Caixa está Fechado!'); window.location.href='/central';</script>")
@@ -148,7 +148,7 @@ async def vendas(request: Request, cat: str = "CHOPP", p: str = "", modo: str = 
         if p:
             role = request.session.get("role")
             for r in conn.execute(text("SELECT item_nome, COUNT(*) as qtd, SUM(valor) as tot FROM vendas_itens WHERE pulseira_num = :p AND status = 'ABERTA' GROUP BY item_nome"), {"p": p}).fetchall():
-                btn_estorno = f"<form action='/estorno' method='post' style='display:inline; margin:0;'><input type='hidden' name='p' value='{p}'><input type='hidden' name='i' value='{r.item_nome}'><button style='background:none;border:none;color:#d31a21;font-weight:bold;cursor:pointer;margin-left:8px;font-size:16px;' title='Estornar 1x'>✖</button></form>" if role in ['admin', 'gerente'] else ""
+                btn_estorno = f"<form action='/estorno' method='post' style='display:inline; margin:0;'><input type='hidden' name='p' value='{p}'><input type='hidden' name='i' value='{r.item_nome}'><button style='background:none;border:none;color:#d31a21;font-weight:bold;cursor:pointer;margin-left:8px;font-size:16px;' title='Estornar 1x'>✖</button></form>" if role in ['admin', 'administrador', 'gerente'] else ""
                 itens_html += f"<div class='item-linha'><span style='display:flex;align-items:center;'>{r.qtd}x {r.item_nome} {btn_estorno}</span><span>R$ {float(r.tot or 0):.2f}</span></div>"
     btn_txt = "💳 IR PARA PAGAMENTO" if p.startswith("AVUL") else "LANÇAR PEDIDO"
     comanda_display = f"""<div class='comanda-header'><div style='font-size:13px;'>{"VENDA BALCÃO:" if p.startswith("AVUL") else "PULSEIRA:"}</div><div style='font-size:20px; font-weight:bold; letter-spacing:1px;'>{p}</div><button class='btn-acao' style='background:white; color:#d31a21; margin-top:10px;' onclick='window.location.href=\"/vendas\"'>TROCAR OPERAÇÃO</button></div><div class='comanda-body'><div class='secao-titulo'>Consumo Atual</div>{itens_html}<hr><div class='secao-titulo'>Novo Pedido</div><div id='novo-pedido'></div></div><div class='comanda-footer'><div style='display:flex; justify-content:space-between; font-weight:bold;'><span>Subtotal:</span><span id='tot-pedido'>R$ 0.00</span></div><br><button class='btn-acao' style='background:#28a745;' onclick='enviarPedido()'>{btn_txt}</button><a href='/central' class='btn-acao' style='background:#333'>Sair da Venda</a></div>"""
@@ -157,7 +157,7 @@ async def vendas(request: Request, cat: str = "CHOPP", p: str = "", modo: str = 
 
 @app.post("/prosseguir_avulsa", response_class=HTMLResponse)
 async def prosseguir_avulsa(request: Request, p: str = Form(...), itens: str = Form(...)):
-    if request.session.get("role") not in ["admin", "gerente", "garcom", "caixa"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente", "garcom", "caixa"]: return RedirectResponse(url="/central")
     cart_itens = json.loads(itens)
     tot_produtos = sum(i['v'] for i in cart_itens)
     lista_html = ""
@@ -196,7 +196,7 @@ async def confirmar_avulsa(request: Request, p: str = Form(...), itens: str = Fo
 
 @app.post("/estorno")
 async def estornar_item(request: Request):
-    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/vendas", status_code=303)
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/vendas", status_code=303)
     f = await request.form()
     p, i = f.get("p"), f.get("i")
     try:
@@ -229,7 +229,7 @@ async def lancar_pedido(request: Request):
 
 @app.get("/fechar_conta", response_class=HTMLResponse)
 async def fechar_conta(request: Request, q: str = ""):
-    if request.session.get("role") not in ["admin", "gerente", "garcom", "caixa"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente", "garcom", "caixa"]: return RedirectResponse(url="/central")
     with engine.connect() as conn:
         c_status = conn.execute(text("SELECT tipo FROM caixa_movimentos WHERE tipo IN ('ABERTURA', 'FECHAMENTO') ORDER BY id DESC LIMIT 1")).fetchone()
         if not c_status or c_status[0] != 'ABERTURA': return HTMLResponse("<script>alert('O Caixa está Fechado!'); window.location.href='/central';</script>")
@@ -249,7 +249,7 @@ async def fechar_conta(request: Request, q: str = ""):
 
 @app.post("/parcial")
 async def registrar_parcial(request: Request):
-    if request.session.get("role") not in ["admin", "gerente", "garcom", "caixa"]: return RedirectResponse(url="/central", status_code=303)
+    if request.session.get("role") not in ["admin", "administrador", "gerente", "garcom", "caixa"]: return RedirectResponse(url="/central", status_code=303)
     f = await request.form()
     p, cpf, val, pg = f.get("p"), f.get("cpf"), float(f.get("val", 0)), f.get("pg")
     if val <= 0: return RedirectResponse(url=f"/fechar_conta?q={p}", status_code=303)
@@ -335,7 +335,7 @@ async def salvar(request: Request):
 
 @app.get("/historico", response_class=HTMLResponse)
 async def tela_historico(request: Request, data_filtro: str = ""):
-    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/central")
     hoje = data_filtro if data_filtro else date.today().strftime("%Y-%m-%d")
     linhas = ""
     with engine.connect() as conn:
@@ -348,7 +348,7 @@ async def tela_historico(request: Request, data_filtro: str = ""):
 
 @app.post("/executar_estorno")
 async def executar_estorno(request: Request, id_item: int = Form(...)):
-    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/central")
     try:
         with engine.begin() as conn:
             item = conn.execute(text("SELECT pulseira_num, item_nome, valor, status FROM vendas_itens WHERE id = :id FOR UPDATE"), {"id": id_item}).fetchone()
@@ -363,12 +363,12 @@ async def executar_estorno(request: Request, id_item: int = Form(...)):
 
 @app.get("/abrir_caixa", response_class=HTMLResponse)
 async def abrir_caixa(request: Request):
-    if request.session.get("role") not in ["admin", "gerente", "caixa"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente", "caixa"]: return RedirectResponse(url="/central")
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2>Iniciar Evento / Caixa</h2><p style='color:#666;'>Informe o valor de troco inicial da gaveta:</p><form action='/iniciar_caixa' method='post'><input class='input-padrao' name='fundo' type='number' step='0.01' placeholder='R$ Fundo de Caixa' required style='font-size:24px; text-align:center; padding:15px; font-weight:bold;'><button class='btn-acao' style='background:#28a745; font-size:18px; margin-top:20px;'>✔️ ABRIR CAIXA</button></form><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
 
 @app.post("/iniciar_caixa")
 async def iniciar_caixa(request: Request):
-    if request.session.get("role") not in ["admin", "gerente", "caixa"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente", "caixa"]: return RedirectResponse(url="/central")
     f = await request.form()
     try:
         with engine.begin() as conn: conn.execute(text("INSERT INTO caixa_movimentos (tipo, valor, descricao, usuario) VALUES ('ABERTURA', :v, 'Fundo de Caixa Inicial', :u)"), {"v": float(f.get("fundo", "0")), "u": request.session.get("user")})
@@ -377,7 +377,7 @@ async def iniciar_caixa(request: Request):
 
 @app.get("/caixa", response_class=HTMLResponse)
 async def tela_caixa(request: Request):
-    if request.session.get("role") not in ["admin", "gerente", "caixa"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente", "caixa"]: return RedirectResponse(url="/central")
     hoje = date.today().strftime("%Y-%m-%d")
     with engine.connect() as conn:
         pag_q = conn.execute(text(f"SELECT forma_pagamento, SUM(total_conta) as total FROM pulseiras WHERE CAST(data_fechamento AS DATE) = CAST('{hoje}' AS DATE) AND status = 'FECHADA' GROUP BY forma_pagamento")).fetchall()
@@ -389,7 +389,7 @@ async def tela_caixa(request: Request):
 
 @app.post("/sangria")
 async def registrar_sangria(request: Request):
-    if request.session.get("role") not in ["admin", "gerente", "caixa"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente", "caixa"]: return RedirectResponse(url="/central")
     f = await request.form()
     try:
         with engine.begin() as conn: conn.execute(text("INSERT INTO caixa_movimentos (tipo, valor, descricao, usuario) VALUES ('SANGRIA', :v, :d, :u)"), {"v": float(f.get("valor", "0")), "d": f.get("desc", ""), "u": request.session.get("user")})
@@ -398,12 +398,12 @@ async def registrar_sangria(request: Request):
 
 @app.get("/caixa_cego", response_class=HTMLResponse)
 async def tela_caixa_cego(request: Request):
-    if request.session.get("role") not in ["admin", "gerente", "caixa"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente", "caixa"]: return RedirectResponse(url="/central")
     return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'>{IMG_LOGO_PEQ}<h2 style='color:#d31a21;'>Fechamento Cego</h2><p style='color:black;'>Conte as notas da gaveta e digite abaixo o valor total exato do dinheiro físico.</p><form action='/resumo_whatsapp' method='post'><input class='input-padrao' name='dinheiro_gaveta' type='number' step='0.01' placeholder='R$ 0.00' required style='font-size:24px; text-align:center; padding:20px; font-weight:bold;'><button class='btn-acao' style='background:#28a745; font-size:18px; margin-top:20px;'>✔️ CONFIRMAR VALOR FÍSICO</button></form><br><a href='/caixa' style='color:gray'>Cancelar</a></div></div></body></html>"
 
 @app.post("/resumo_whatsapp", response_class=HTMLResponse)
 async def resumo_whatsapp(request: Request):
-    if request.session.get("role") not in ["admin", "gerente", "caixa"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente", "caixa"]: return RedirectResponse(url="/central")
     f = await request.form()
     gaveta = float(f.get("dinheiro_gaveta", "0"))
     hoje_str, hoje_br, usuario = date.today().strftime("%Y-%m-%d"), date.today().strftime("%d/%m/%Y"), request.session.get("user", "Desconhecido").upper()
@@ -431,7 +431,7 @@ async def resumo_whatsapp(request: Request):
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request, inicio: str = "", fim: str = "", cat: str = "", prod: str = "", garcom_filtro: str = ""):
-    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/central")
     where_pulseira, where_vendas, where_hist, where_prod = "status = 'FECHADA'", "status = 'FECHADA'", "1=1", "1=1"
     params_p, params_v, params_h = {}, {}, {}
     if inicio:
@@ -501,19 +501,19 @@ async def api_impresso(j_id: int):
 
 @app.get("/impressora_virtual", response_class=HTMLResponse)
 async def impressora_virtual(request: Request):
-    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/central")
     return f"<html><head>{CSS}</head><body style='background-color:#1a1a1a;'><div class='container-center'><div class='card-center' style='max-width:600px; width:100%;'><h2>🖨️ Impressora Virtual</h2><p style='color:#666;'>Mantenha essa tela aberta no PC para simular a impressora.</p><div id='papel' style='background:#ffffe0; color:black; font-family:monospace; font-size:14px; text-align:left; padding:20px; height:400px; overflow-y:auto; border-radius:5px; border-left: 5px solid #ccc; box-shadow: inset 0 0 10px rgba(0,0,0,0.1); white-space: pre-wrap;'>Aguardando tickets...</div><br><button class='btn-acao' style='background:#d31a21;' onclick='document.getElementById(\"papel\").innerHTML=\"Aguardando tickets...\"'>LIMPAR PAPEL</button><br><a href='/central' style='color:gray'>Voltar</a></div></div><script>setInterval(() => {{ fetch('/api/pendentes').then(r => r.json()).then(data => {{ if(data.jobs && data.jobs.length > 0) {{ let job = data.jobs[0]; let papel = document.getElementById('papel'); if(papel.innerHTML === 'Aguardando tickets...') papel.innerHTML = ''; papel.innerHTML += '\\n\\n' + job.conteudo; papel.scrollTop = papel.scrollHeight; fetch('/api/impresso/' + job.id, {{method: 'POST'}}); }} }}); }}, 3000);</script></body></html>"
 
 @app.get("/baixar_conector")
 async def baixar_conector(request: Request):
-    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/central")
     base_url = str(request.base_url).rstrip('/')
     script_content = f"""import sys\nimport subprocess\n\nprint("=========================================")\nprint(" 🛠️ VERIFICANDO DEPENDÊNCIAS DO SISTEMA... ")\nprint("=========================================")\ntry:\n    import requests\n    import win32print\nexcept ImportError:\n    print("⏳ Primeira vez rodando! Instalando o motor da impressora automaticamente...")\n    print("   Isso pode levar alguns segundos. Não feche a janela.\\n")\n    subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "pywin32"])\n    print("\\n✅ Instalação concluída com sucesso!\\n")\n    import requests\n    import win32print\n\nimport time\n\nAPI_URL = "{base_url}"\n\ndef imprimir_ticket(texto):\n    impressora_padrao = win32print.GetDefaultPrinter()\n    try:\n        hPrinter = win32print.OpenPrinter(impressora_padrao)\n        hJob = win32print.StartDocPrinter(hPrinter, 1, ("Ticket Quiosque", None, "RAW"))\n        win32print.StartPagePrinter(hPrinter)\n        \n        texto_bytes = texto.encode("latin-1", errors="replace")\n        win32print.WritePrinter(hPrinter, texto_bytes)\n        win32print.WritePrinter(hPrinter, b"\\n\\n\\n\\n\\x1B\\x6D")\n        \n        win32print.EndPagePrinter(hPrinter)\n        win32print.EndDocPrinter(hPrinter)\n        win32print.ClosePrinter(hPrinter)\n        print("✔️ Ticket Impresso com Sucesso!")\n    except Exception as e:\n        print(f"❌ Erro na impressora: {{e}}")\n\nprint("=========================================")\nprint("🚀 CONECTOR DE IMPRESSORA INICIADO")\nprint(f"Conectado em: {{API_URL}}")\n\nimpressora_atual = win32print.GetDefaultPrinter()\nprint(f"\\n🖨️  Impressora detectada: {{impressora_atual}}")\nif "PDF" in impressora_atual.upper() or "ONENOTE" in impressora_atual.upper():\n    print("⚠️  ATENÇÃO: Você não configurou uma impressora térmica!")\n    print("   O sistema vai gerar PDFs corrompidos (pois enviamos código de máquina RAW).")\n    print("   Para resolver: Instale a sua térmica USB e defina-a como 'Padrão' no Windows.\\n")\n\nprint("Deixe essa janela minimizada para receber tickets...")\nprint("=========================================\\n")\n\nwhile True:\n    try:\n        resposta = requests.get(f"{{API_URL}}/api/pendentes", timeout=5)\n        if resposta.status_code == 200:\n            dados = resposta.json()\n            for job in dados.get("jobs", []):\n                print(f"🖨️ Imprimindo pedido ID {{job['id']}}...")\n                imprimir_ticket(job['conteudo'])\n                requests.post(f"{{API_URL}}/api/impresso/{{job['id']}}", timeout=5)\n    except Exception as e:\n        pass\n    time.sleep(3)\n"""
     return Response(content=script_content, media_type="text/x-python", headers={"Content-Disposition": "attachment; filename=conector_impressao.py"})
 
 @app.get("/estoque", response_class=HTMLResponse)
 async def tela_estoque(request: Request):
-    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/central")
     linhas, curr_cat = "", ""
     with engine.connect() as conn:
         prods_db = conn.execute(text("SELECT p.id, p.nome, p.categoria, p.preco, p.estoque, MAX(h.data_entrada) as ultima_compra FROM produtos p LEFT JOIN historico_estoque h ON p.nome = h.produto_nome GROUP BY p.id, p.nome, p.categoria, p.preco, p.estoque ORDER BY p.categoria, p.nome")).fetchall()
@@ -526,6 +526,7 @@ async def tela_estoque(request: Request):
 
 @app.post("/novo_produto")
 async def novo_produto(request: Request):
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/central")
     f = await request.form()
     try:
         with engine.begin() as conn: 
@@ -536,6 +537,7 @@ async def novo_produto(request: Request):
 
 @app.post("/editar_produto")
 async def editar_produto(request: Request):
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/central")
     f = await request.form()
     n_orig, n_novo, cat, p = f.get("nome_orig"), f.get("nome"), f.get("cat"), float(f.get("preco").replace(",", "."))
     try:
@@ -549,6 +551,7 @@ async def editar_produto(request: Request):
 
 @app.post("/att_estoque")
 async def att_estoque(request: Request):
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/central")
     f = await request.form()
     try:
         with engine.begin() as conn: 
@@ -559,6 +562,7 @@ async def att_estoque(request: Request):
 
 @app.post("/excluir_produto")
 async def excluir_produto(request: Request):
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/central")
     f = await request.form()
     try:
         with engine.begin() as conn: conn.execute(text("DELETE FROM produtos WHERE nome = :n"), {"n": f.get("nome", "")})
@@ -567,7 +571,7 @@ async def excluir_produto(request: Request):
 
 @app.get("/comissoes", response_class=HTMLResponse)
 async def tela_comissoes(request: Request, garcom_filtro: str = ""):
-    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/central")
     linhas_pendentes, linhas_pagas = "", ""
     with engine.connect() as conn:
         garcons_db = conn.execute(text("SELECT DISTINCT garcom FROM vendas_itens WHERE garcom IS NOT NULL ORDER BY garcom")).fetchall()
@@ -588,6 +592,7 @@ async def tela_comissoes(request: Request, garcom_filtro: str = ""):
 
 @app.post("/pagar_comissao")
 async def pagar_comissao(request: Request):
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/central")
     f = await request.form()
     try:
         with engine.begin() as conn: conn.execute(text("UPDATE vendas_itens SET comissao_status = 'PAGA' WHERE CAST(data_venda AS DATE) = CAST(:d AS DATE) AND garcom = :g AND status = 'FECHADA' AND comissao_status = 'PENDENTE'"), {"d": f.get("data_venda"), "g": f.get("garcom")})
@@ -596,26 +601,41 @@ async def pagar_comissao(request: Request):
 
 @app.get("/usuarios", response_class=HTMLResponse)
 async def tela_usuarios(request: Request):
-    if request.session.get("role") != "admin": return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador"]: return RedirectResponse(url="/central")
     linhas = ""
     with engine.connect() as conn:
         users_db = conn.execute(text("SELECT id, username, role FROM usuarios ORDER BY role, username")).fetchall()
         for r in users_db:
-            acoes = f"<form action='/excluir_usuario' method='post' style='margin:0;' onsubmit='return confirm(\"Excluir?\");'><input type='hidden' name='id' value='{r.id}'><button class='btn-acao' style='background:#d31a21; padding:8px; width:auto;'>🗑️</button></form>" if r.username != "admin" else ""
+            btn_del = f"<form action='/excluir_usuario' method='post' style='margin:0;' onsubmit='return confirm(\"Excluir?\");'><input type='hidden' name='id' value='{r.id}'><button class='btn-acao' style='background:#d31a21; padding:8px; width:auto; margin:0;'>🗑️</button></form>" if r.username != "admin" else ""
+            acoes = f"<div style='display:flex; gap:5px;'><button type='button' class='btn-acao' style='background:#f1c40f; padding:8px; color:black; width:auto; margin:0;' onclick='editUser({r.id}, \"{r.username}\", \"{r.role}\")'>✏️</button>{btn_del}</div>"
             linhas += f"<tr><td style='color:black; font-weight:bold;'>{r.username.upper()}</td><td style='color:#062b5e;'>{r.role.upper()}</td><td>{acoes}</td></tr>"
-    add_form = f"<div style='background:#f4f4f4; padding:20px; border-radius:10px; margin-bottom:20px; text-align:left; border:1px solid #ccc;'><h3 style='margin-top:0; color:#9b59b6;'>➕ NOVO USUÁRIO</h3><form action='/novo_usuario' method='post' style='display:flex; flex-wrap:wrap; gap:10px;'><input name='u' placeholder='Login' class='input-padrao' style='flex:1;' required><input name='p' type='password' placeholder='Senha' class='input-padrao' style='flex:1;' required><select name='r' class='input-padrao' style='flex:1;'><option value='gerente'>GERENTE</option><option value='caixa'>CAIXA</option><option value='garcom'>GARÇOM</option><option value='portaria'>PORTARIA</option></select><button class='btn-acao' style='background:#9b59b6; width:100%;'>CRIAR ACESSO</button></form></div>"
-    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><h2>Usuários</h2>{add_form}<div class='table-responsive' style='max-height:400px; overflow-y:auto;'><table><tr><th style='color:black'>Login</th><th style='color:black'>Cargo</th><th style='color:black'>Ação</th></tr>{linhas}</table></div><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
+    add_form = f"<div style='background:#f4f4f4; padding:20px; border-radius:10px; margin-bottom:20px; text-align:left; border:1px solid #ccc;'><h3 style='margin-top:0; color:#9b59b6;' id='titulo_form_user'>➕ NOVO USUÁRIO</h3><form id='form_user' action='/novo_usuario' method='post' style='display:flex; flex-wrap:wrap; gap:10px;'><input type='hidden' name='id_user' id='id_user_form'><input name='u' id='u_form' placeholder='Login' class='input-padrao' style='flex:1;' required><input name='p' id='p_form' type='password' placeholder='Senha' class='input-padrao' style='flex:1;' required><select name='r' id='r_form' class='input-padrao' style='flex:1;'><option value='administrador'>ADMINISTRADOR</option><option value='gerente'>GERENTE</option><option value='caixa'>CAIXA</option><option value='garcom'>GARÇOM</option><option value='portaria'>PORTARIA</option></select><button id='btn_salvar_user' class='btn-acao' style='background:#9b59b6; width:100%;'>CRIAR ACESSO</button></form></div><script>function editUser(id, u, r) {{ document.getElementById('titulo_form_user').innerText = '✏️ EDITAR USUÁRIO'; document.getElementById('form_user').action = '/editar_usuario'; document.getElementById('id_user_form').value = id; document.getElementById('u_form').value = u; document.getElementById('p_form').placeholder = 'Nova senha (ou branco)'; document.getElementById('p_form').removeAttribute('required'); document.getElementById('r_form').value = r; document.getElementById('btn_salvar_user').innerText = 'ATUALIZAR ACESSO'; document.getElementById('btn_salvar_user').style.background = '#f39c12'; window.scrollTo(0, 0); }}</script>"
+    return f"<html><head>{CSS}</head><body><div class='container-center'><div class='card-center'><h2>Usuários</h2>{add_form}<div class='table-responsive' style='max-height:400px; overflow-y:auto;'><table><tr><th style='color:black'>Login</th><th style='color:black'>Cargo</th><th style='color:black'>Ações</th></tr>{linhas}</table></div><br><a href='/central' style='color:gray'>Voltar</a></div></div></body></html>"
 
 @app.post("/novo_usuario")
 async def novo_usuario(request: Request):
+    if request.session.get("role") not in ["admin", "administrador"]: return RedirectResponse(url="/central")
     f = await request.form()
     try:
         with engine.begin() as conn: conn.execute(text("INSERT INTO usuarios (username, password, role) VALUES (:u, :p, :r) ON CONFLICT (username) DO NOTHING"), {"u": f.get("u").lower(), "p": f.get("p"), "r": f.get("r")})
     except: pass
     return RedirectResponse(url="/usuarios", status_code=303)
 
+@app.post("/editar_usuario")
+async def editar_usuario(request: Request):
+    if request.session.get("role") not in ["admin", "administrador"]: return RedirectResponse(url="/central")
+    f = await request.form()
+    uid, u, p, r = f.get("id_user"), f.get("u").lower(), f.get("p"), f.get("r")
+    try:
+        with engine.begin() as conn:
+            if p: conn.execute(text("UPDATE usuarios SET username=:u, password=:p, role=:r WHERE id=:id"), {"u": u, "p": p, "r": r, "id": uid})
+            else: conn.execute(text("UPDATE usuarios SET username=:u, role=:r WHERE id=:id"), {"u": u, "r": r, "id": uid})
+    except: pass
+    return RedirectResponse(url="/usuarios", status_code=303)
+
 @app.post("/excluir_usuario")
 async def excluir_usuario(request: Request):
+    if request.session.get("role") not in ["admin", "administrador"]: return RedirectResponse(url="/central")
     f = await request.form()
     try:
         with engine.begin() as conn: conn.execute(text("DELETE FROM usuarios WHERE id = :id AND username != 'admin'"), {"id": f.get("id")})
@@ -646,7 +666,7 @@ async def ver_cardapio():
 
 @app.get("/qr", response_class=HTMLResponse)
 async def gerar_qr(request: Request):
-    if request.session.get("role") not in ["admin", "gerente"]: return RedirectResponse(url="/central")
+    if request.session.get("role") not in ["admin", "administrador", "gerente"]: return RedirectResponse(url="/central")
     base_url = str(request.base_url).rstrip('/')
     url_cardapio = f"{base_url}/cardapio"
     qr_api = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(url_cardapio)}"
